@@ -1,252 +1,465 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام إدارة الموارد والسونارات - لوحة التحكم</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+{% extends 'base.html' %}
 
-    <style>
-        /* الخطوط الأساسية */
-        body {
-            font-family: 'Tajawal', sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f7fa; /* لون خلفية أفتح وأكثر هدوءً */
-            color: #333;
-            line-height: 1.6;
+{% block title %}الرئيسية - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Welcome Banner */
+    .welcome-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px;
+        border-radius: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+        animation: slideIn 0.6s ease-out;
+        z-index: 1;
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
         }
-
-        /* حاوية الصفحة */
-        .container {
-            max-width: 1200px; /* زيادة العرض لاستيعاب المحتوى بشكل أفضل */
-            margin: 30px auto;
-            padding: 20px;
-            background-color: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* ظل خفيف لإبراز الحاوية */
+        to {
+            opacity: 1;
+            transform: translateY(0);
         }
-
-        /* الترويسات (العناوين) */
-        h1 {
-            color: #1a237e; /* أزرق داكن قوي */
-            border-bottom: 3px solid #e0e0e0;
-            padding-bottom: 10px;
-            margin-bottom: 25px;
-            font-weight: 800; /* خط ثقيل */
-            text-align: center;
+    }
+    
+    .welcome-banner::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 400px;
+        height: 400px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        animation: float 6s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+        0%, 100% {
+            transform: translateY(0) rotate(0deg);
         }
-
-        h2 {
-            color: #283593; /* أزرق أقل حدة */
-            margin-top: 30px;
-            margin-bottom: 15px;
-            padding-bottom: 5px;
-            border-bottom: 1px dashed #cfd8dc;
-            font-weight: 700;
+        50% {
+            transform: translateY(-20px) rotate(180deg);
         }
-
-        /* قسم الإحصائيات (Stats) */
-        .stats {
-            display: grid; /* استخدام grid لترتيب أكثر مرونة */
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin-bottom: 40px;
+    }
+    
+    .welcome-content {
+        position: relative;
+        z-index: 1;
+    }
+    
+    .welcome-title {
+        font-size: 2.5rem;
+        font-weight: 900;
+        margin-bottom: 10px;
+        animation: fadeInUp 0.8s ease-out;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
         }
-
-        .stat {
-            background: linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%); /* تدرج لوني حيوي */
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            text-align: right; /* محاذاة النص لليمين */
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            position: relative;
-            overflow: hidden;
-            transition: transform 0.3s;
+        to {
+            opacity: 1;
+            transform: translateY(0);
         }
-
-        .stat:hover {
-            transform: translateY(-5px); /* تأثير رفع خفيف عند التمرير */
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    }
+    
+    .welcome-subtitle {
+        font-size: 1.1rem;
+        opacity: 0.95;
+        margin: 0;
+    }
+    
+    .welcome-icon {
+        font-size: 6rem;
+        opacity: 0.3;
+        animation: bounce 2s ease-in-out infinite;
+    }
+    
+    @keyframes bounce {
+        0%, 100% {
+            transform: translateY(0);
         }
-
-        .stat-icon {
-            font-size: 36px;
-            opacity: 0.2;
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
+        50% {
+            transform: translateY(-15px);
         }
+    }
+    
+    /* Stats Container */
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 25px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 30px;
+        border-radius: 20px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        border: 2px solid transparent;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-10px) scale(1.02);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stat-card.purple {
+        border-color: #7C3AED;
+    }
+    
+    .stat-card.purple:hover {
+        background: linear-gradient(135deg, #7C3AED 0%, #6366F1 100%);
+        color: white;
+    }
+    
+    .stat-card.orange {
+        border-color: #F59E0B;
+    }
+    
+    .stat-card.orange:hover {
+        background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%);
+        color: white;
+    }
+    
+    .stat-card.green {
+        border-color: #10B981;
+    }
+    
+    .stat-card.green:hover {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+    }
+    
+    .stat-card.blue {
+        border-color: #3B82F6;
+    }
+    
+    .stat-card.blue:hover {
+        background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+        color: white;
+    }
+    
+    .stat-content {
+        z-index: 1;
+    }
+    
+    .stat-label {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 10px;
+        opacity: 0.8;
+    }
+    
+    .stat-value {
+        font-size: 3rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+    
+    .stat-icon-wrapper {
+        font-size: 4rem;
+        opacity: 0.15;
+        transition: all 0.4s ease;
+    }
+    
+    .stat-card:hover .stat-icon-wrapper {
+        opacity: 0.3;
+        transform: scale(1.2) rotate(5deg);
+    }
+    
+    .table-responsive {
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+        padding: 15px;
+    }
+    
+    .table tbody tr {
+        transition: all 0.3s ease;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #F3F4F6;
+        transform: scale(1.01);
+    }
+    
+    .badge-shift {
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .badge-morning {
+        background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        color: white;
+    }
+    
+    .badge-evening {
+        background: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+        color: white;
+    }
+    
+    .badge-night {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: white;
+    }
+    
+    .form-card {
+        background: white;
+        border-radius: 15px;
+        padding: 30px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+    }
+    
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1F2937;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-title i {
+        color: #4F46E5;
+    }
+</style>
+{% endblock %}
 
-        .stat-label {
-            font-size: 16px;
-            margin-bottom: 5px;
-            opacity: 0.8;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: 800;
-        }
-
-        /* قسم الإضافة (Form) */
-        .form-section {
-            background-color: #f7f9fc;
-            padding: 25px;
-            border-radius: 10px;
-            border: 1px solid #e0e7e9;
-            margin-bottom: 30px;
-        }
-
-        /* حقول الإدخال */
-        input, select {
-            width: 100%;
-            padding: 12px;
-            margin-top: 5px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            border: 1px solid #c8d8e4;
-            box-sizing: border-box; /* للتأكد من أن padding لا يغير العرض */
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-
-        input:focus, select:focus {
-            border-color: #3f51b5;
-            box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.2);
-            outline: none;
-        }
-
-        /* الزر */
-        button {
-            width: auto; /* ليتناسب مع المحتوى */
-            padding: 12px 25px;
-            background-color: #4caf50; /* لون أخضر لإجراء الحفظ */
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: 0.3s;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        button:hover {
-            background-color: #388e3c;
-            transform: translateY(-2px);
-        }
-
-        /* الجدول */
-        table {
-            width: 100%;
-            border-collapse: separate; /* استخدام separate للحواف المستديرة */
-            border-spacing: 0;
-            margin-top: 20px;
-            background-color: white;
-            border-radius: 10px;
-            overflow: hidden; /* لإظهار حواف الجدول المستديرة */
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        th, td {
-            padding: 15px;
-            text-align: right; /* محاذاة النص لليمين */
-            border-bottom: 1px solid #eceff1;
-        }
-
-        th {
-            background-color: #3f51b5; /* لون خلفية رأس الجدول */
-            color: white;
-            font-weight: 700;
-            position: sticky;
-            top: 0;
-        }
-
-        /* تأثير الصفوف الزوجية */
-        tr:nth-child(even) {
-            background-color: #f7f9fa;
-        }
-
-        tr:hover {
-            background-color: #e3f2fd; /* تمييز الصف عند التمرير */
-        }
-
-        /* إضافة ستايل للـ p داخل الـ form ليظهر بشكل أفضل */
-        form p {
-            margin: 0; /* إزالة الهامش الافتراضي */
-        }
-
-        form label {
-            display: block;
-            font-weight: 700;
-            color: #455a64;
-            margin-bottom: 5px;
-            margin-top: 10px;
-        }
-
-    </style>
-</head>
-<body>
+{% block content %}
+<div class="content-wrapper">
     <div class="container">
-        <h1><i class="fas fa-satellite-dish"></i> نظام إدارة الموارد والسونارات <i class="fas fa-users-cog"></i></h1>
-
-        <h2><i class="fas fa-chart-bar"></i> نظرة عامة</h2>
-        <div class="stats">
-            <div class="stat">
-                <i class="fas fa-user-tie stat-icon"></i>
-                <div class="stat-label">إجمالي الموظفين</div>
-                <div class="stat-value">{{ total_employees }}</div>
+        <!-- ترحيب بالمستخدم -->
+        <div class="welcome-banner">
+            <div class="welcome-content">
+                <h1 class="welcome-title">
+                    <i class="fas fa-hand-sparkles"></i>
+                    مرحباً، {{ user.first_name|default:user.username }}!
+                </h1>
+                <p class="welcome-subtitle">
+                    <i class="fas fa-calendar-day"></i>
+                    {% now "l, j F Y" %}
+                    |
+                    <i class="fas fa-clock"></i>
+                    <span id="current-time"></span>
+                </p>
             </div>
-            <div class="stat" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
-                <i class="fas fa-cogs stat-icon"></i>
-                <div class="stat-label">العدد الكلي للسونارات</div>
-                <div class="stat-value">{{ total_sonars }}</div>
-            </div>
-            <div class="stat" style="background: linear-gradient(135deg, #8bc34a 0%, #689f38 100%);">
-                <i class="fas fa-link stat-icon"></i>
-                <div class="stat-label">إجمالي الإسنادات النشطة</div>
-                <div class="stat-value">{{ assignments|length }}</div>
+            <div class="welcome-icon">
+                <i class="fas fa-user-astronaut"></i>
             </div>
         </div>
-
-        <div class="form-section">
-            <h2><i class="fas fa-plus-circle"></i> إضافة إسناد / مهمة جديد</h2>
+        
+        <!-- إحصائيات -->
+        <div class="stats-container">
+            <div class="stat-card purple">
+                <div class="stat-content">
+                    <div class="stat-label">
+                        <i class="fas fa-users"></i> إجمالي الموظفين
+                    </div>
+                    <div class="stat-value">{{ total_employees }}</div>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-user-tie stat-icon"></i>
+                </div>
+            </div>
+            
+            <div class="stat-card orange">
+                <div class="stat-content">
+                    <div class="stat-label">
+                        <i class="fas fa-satellite-dish"></i> إجمالي السونارات
+                    </div>
+                    <div class="stat-value">{{ total_sonars }}</div>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-broadcast-tower stat-icon"></i>
+                </div>
+            </div>
+            
+            <div class="stat-card green">
+                <div class="stat-content">
+                    <div class="stat-label">
+                        <i class="fas fa-tasks"></i> الإسنادات الحديثة
+                    </div>
+                    <div class="stat-value">{{ assignments|length }}</div>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-clipboard-check stat-icon"></i>
+                </div>
+            </div>
+            
+            <div class="stat-card blue">
+                <div class="stat-content">
+                    <div class="stat-label">
+                        <i class="fas fa-hourglass-half"></i> التبديلات المعلقة
+                    </div>
+                    <div class="stat-value">-</div>
+                </div>
+                <div class="stat-icon-wrapper">
+                    <i class="fas fa-clock stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- فورم إضافة إسناد -->
+        <div class="form-card">
+            <h2 class="section-title">
+                <i class="fas fa-plus-circle"></i>
+                إضافة إسناد جديد
+            </h2>
             <form method="POST">
                 {% csrf_token %}
-                {{ form.as_p }}
-                <button type="submit"><i class="fas fa-save"></i> حفظ الإسناد</button>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">{{ form.employee.label }}</label>
+                        {{ form.employee }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">{{ form.sonar.label }}</label>
+                        {{ form.sonar }}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">{{ form.shift.label }}</label>
+                        {{ form.shift }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">{{ form.assigned_at.label }}</label>
+                        {{ form.assigned_at }}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> حفظ الإسناد
+                </button>
             </form>
         </div>
-
-        <h2><i class="fas fa-list-alt"></i> سجل الإسنادات الحديثة</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>الموظف <i class="fas fa-user"></i></th>
-                    <th>السونار <i class="fas fa-microchip"></i></th>
-                    <th>الشفت <i class="fas fa-clock"></i></th>
-                    <th>وقت الإسناد <i class="fas fa-calendar-alt"></i></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for a in assignments %}
-                <tr>
-                    <td>{{ a.employee.name }}</td>
-                    <td>{{ a.sonar.name }}</td>
-                    <td>{{ a.shift.name }}</td>
-                    <td>{{ a.assigned_at }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" style="text-align: center; color: #757575;">لا توجد إسنادات حالية لعرضها.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        
+        <!-- جدول الإسنادات -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-list"></i> سجل الإسنادات الحديثة
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th><i class="fas fa-user"></i> الموظف</th>
+                                <th><i class="fas fa-satellite-dish"></i> السونار</th>
+                                <th><i class="fas fa-clock"></i> الشفت</th>
+                                <th><i class="fas fa-calendar-alt"></i> تاريخ الإسناد</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in assignments %}
+                            <tr>
+                                <td>
+                                    <strong>{{ assignment.employee.name }}</strong>
+                                </td>
+                                <td>{{ assignment.sonar.name }}</td>
+                                <td>
+                                    {% if assignment.shift.name == 'morning' %}
+                                        <span class="badge badge-shift badge-morning">
+                                            <i class="fas fa-sun"></i> صباحي
+                                        </span>
+                                    {% elif assignment.shift.name == 'evening' %}
+                                        <span class="badge badge-shift badge-evening">
+                                            <i class="fas fa-cloud-sun"></i> مسائي
+                                        </span>
+                                    {% elif assignment.shift.name == 'night' %}
+                                        <span class="badge badge-shift badge-night">
+                                            <i class="fas fa-moon"></i> ليلي
+                                        </span>
+                                    {% else %}
+                                        <span class="badge badge-shift">{{ assignment.shift }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-5">
+                                    <i class="fas fa-inbox fa-3x mb-3 d-block" style="opacity: 0.3;"></i>
+                                    لا توجد إسنادات حالية لعرضها
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // تحديث الوقت في الوقت الفعلي
+    function updateTime() {
+        const now = new Date();
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const timeElement = document.getElementById('current-time');
+        if (timeElement) {
+            timeElement.textContent = `${hours}:${minutes}:${seconds}`;
+        }
+    }
+    
+    // تحديث التاريخ والوقت الافتراضي في الفورم
+    document.addEventListener('DOMContentLoaded', function() {
+        // تحديث الوقت كل ثانية
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // تعبئة حقل التاريخ والوقت
+        const dateTimeInput = document.querySelector('input[type="datetime-local"]');
+        if (dateTimeInput && !dateTimeInput.value) {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            dateTimeInput.value = now.toISOString().slice(0, 16);
+        }
+        
+        // تأثيرات الأنيميشن للكاردات
+        const statCards = document.querySelectorAll('.stat-card');
+        statCards.forEach((card, index) => {
+            card.style.animationDelay = `${index * 0.1}s`;
+            card.style.animation = 'fadeInUp 0.6s ease-out forwards';
+        });
+    });
+</script>
+{% endblock %}
