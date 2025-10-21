@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}حذف شفت - نظام إدارة الشفتات{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> تأكيد الحذف
+                        </h4>
+                    </div>
+                    <div class="card-body text-center">
+                        <i class="fas fa-clock fa-4x text-danger mb-3"></i>
+                        <h5 class="mb-3">هل أنت متأكد من حذف هذا الشفت؟</h5>
+                        <div class="alert alert-warning text-start">
+                            <strong><i class="fas fa-tag"></i> النوع:</strong> {{ shift }}<br>
+                            <strong><i class="fas fa-clock"></i> الوقت:</strong> 
+                            من {{ shift.start_hour }}:00 إلى {{ shift.end_hour }}:00
+                        </div>
+                        <p class="text-danger">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <strong>تحذير:</strong> هذا الإجراء لا يمكن التراجع عنه!<br>
+                            سيتم حذف جميع الإسنادات المرتبطة بهذا الشفت.
+                        </p>
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> نعم، احذف
+                            </button>
+                            <a href="{% url 'shift_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> إلغاء
+                            </a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

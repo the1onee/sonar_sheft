@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-help {
+        background: #EFF6FF;
+        border-left: 4px solid #3B82F6;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .employee-select {
+        height: 300px !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-calendar-week"></i> {{ title }}
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-help">
+                            <strong><i class="fas fa-lightbulb"></i> كيفية الاستخدام:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>اختر الشفت (صباحي، مسائي، أو ليلي)</li>
+                                <li>حدد تاريخ بداية ونهاية الأسبوع</li>
+                                <li>اختر الموظفين الذين سيعملون في هذا الشفت (استخدم Ctrl للاختيار المتعدد)</li>
+                                <li>النظام سيوزع هؤلاء الموظفين تلقائياً على السونارات خلال الأسبوع</li>
+                            </ul>
+                        </div>
+                        
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+                            
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ form.non_field_errors }}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.shift.id_for_label }}" class="form-label">
+                                    <i class="fas fa-clock"></i> {{ form.shift.label }}
+                                </label>
+                                {{ form.shift }}
+                                {% if form.shift.errors %}
+                                <div class="text-danger mt-1">
+                                    {% for error in form.shift.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.week_start_date.id_for_label }}" class="form-label">
+                                        <i class="fas fa-calendar-day"></i> {{ form.week_start_date.label }}
+                                    </label>
+                                    {{ form.week_start_date }}
+                                    <small class="form-text text-muted">
+                                        تاريخ بداية الأسبوع (مثلاً: السبت)
+                                    </small>
+                                    {% if form.week_start_date.errors %}
+                                    <div class="text-danger mt-1">
+                                        {% for error in form.week_start_date.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="{{ form.week_end_date.id_for_label }}" class="form-label">
+                                        <i class="fas fa-calendar-day"></i> {{ form.week_end_date.label }}
+                                    </label>
+                                    {{ form.week_end_date }}
+                                    <small class="form-text text-muted">
+                                        تاريخ نهاية الأسبوع (مثلاً: الجمعة)
+                                    </small>
+                                    {% if form.week_end_date.errors %}
+                                    <div class="text-danger mt-1">
+                                        {% for error in form.week_end_date.errors %}
+                                            <small>{{ error }}</small>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="{{ form.employees.id_for_label }}" class="form-label">
+                                    <i class="fas fa-users"></i> {{ form.employees.label }}
+                                </label>
+                                {{ form.employees }}
+                                <small class="form-text text-muted">
+                                    {{ form.employees.help_text }}
+                                </small>
+                                {% if form.employees.errors %}
+                                <div class="text-danger mt-1">
+                                    {% for error in form.employees.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> حفظ
+                                </button>
+                                <a href="{% url 'weekly_schedule_list' %}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> إلغاء
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

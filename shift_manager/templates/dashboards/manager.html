@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+
+{% block title %}لوحة تحكم المدير{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- ترحيب -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-success">
+                <h4 class="mb-0">
+                    <i class="fas fa-user-tie"></i>
+                    مرحباً {{ user.first_name|default:user.username }} - مدير 🎯
+                </h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- إحصائيات -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">المشرفين</h6>
+                            <h2 class="mb-0">{{ total_supervisors }}</h2>
+                        </div>
+                        <i class="fas fa-users-cog fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">الموظفين</h6>
+                            <h2 class="mb-0">{{ total_employees }}</h2>
+                        </div>
+                        <i class="fas fa-users fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">السونارات</h6>
+                            <h2 class="mb-0">{{ total_sonars }}</h2>
+                        </div>
+                        <i class="fas fa-broadcast-tower fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">معلق</h6>
+                            <h2 class="mb-0">{{ pending_assignments }}</h2>
+                        </div>
+                        <i class="fas fa-clock fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- الإعدادات الحالية -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog"></i>
+                        الإعدادات الحالية
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p><strong>فترة التبديل:</strong> {{ settings.rotation_interval_hours }} ساعة</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>الإشعار المبكر:</strong> {{ settings.early_notification_minutes }} دقيقة</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>التبديل التلقائي:</strong> 
+                                {% if settings.is_rotation_active %}
+                                    <span class="badge bg-success">مفعل</span>
+                                {% else %}
+                                    <span class="badge bg-danger">معطل</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <a href="{% url 'settings' %}" class="btn btn-primary btn-sm mt-2">
+                        <i class="fas fa-edit"></i> تعديل الإعدادات
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- قوائم سريعة -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tasks"></i>
+                        إدارة الحسابات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{% url 'supervisor_accounts_list' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-users-cog"></i> إدارة المشرفين
+                            <span class="badge bg-primary rounded-pill float-end">{{ total_supervisors }}</span>
+                        </a>
+                        <a href="{% url 'employee_list' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-users"></i> إدارة الموظفين
+                            <span class="badge bg-info rounded-pill float-end">{{ total_employees }}</span>
+                        </a>
+                        <a href="{% url 'reports' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-chart-bar"></i> التقارير
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-plus"></i>
+                        إنشاء سريع
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'supervisor_account_create' %}" class="btn btn-success">
+                            <i class="fas fa-plus"></i> إضافة مشرف جديد
+                        </a>
+                        <a href="{% url 'employee_create' %}" class="btn btn-info">
+                            <i class="fas fa-plus"></i> إضافة موظف جديد
+                        </a>
+                        <a href="{% url 'sonar_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> إضافة سونار جديد
+                        </a>
+                        <a href="{% url 'send_custom_notification' %}" class="btn btn-warning">
+                            <i class="fas fa-bell"></i> إرسال إشعار للموظفين
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

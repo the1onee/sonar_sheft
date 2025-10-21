@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+
+{% block title %}لوحة تحكم الموظف{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- ترحيب -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-success">
+                <h4 class="mb-0">
+                    <i class="fas fa-user"></i>
+                    مرحباً {{ employee.name }} 👋
+                </h4>
+                <p class="mb-0 mt-2">هذه صفحتك الشخصية لمتابعة نشاطك اليومي</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ملاحظة للموظف -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h6 class="mb-2">
+                    <i class="fas fa-info-circle"></i> ملاحظة مهمة
+                </h6>
+                <p class="mb-0">
+                    <small>
+                        • صفحتك الشخصية تعرض جميع تبديلاتك وإحصائياتك<br>
+                        • يمكنك الاطلاع على جدولك اليومي والأسبوعي من هنا<br>
+                        • للاستفسارات، يرجى التواصل مع المشرف أو المدير
+                    </small>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- إحصائيات اليوم -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">تبديلات اليوم</h6>
+                            <h2 class="mb-0">{{ total_shifts_today }}</h2>
+                        </div>
+                        <i class="fas fa-exchange-alt fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">السونارات</h6>
+                            <h2 class="mb-0">{{ sonars_today }}</h2>
+                        </div>
+                        <i class="fas fa-broadcast-tower fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">مؤكد</h6>
+                            <h2 class="mb-0">{{ confirmed_today }}</h2>
+                        </div>
+                        <i class="fas fa-check-circle fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">معلق</h6>
+                            <h2 class="mb-0">{{ pending_today }}</h2>
+                        </div>
+                        <i class="fas fa-clock fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- تبديلات اليوم -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-day"></i>
+                        تبديلاتك اليوم
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if today_assignments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>السونار</th>
+                                    <th>الشفت</th>
+                                    <th>الوقت</th>
+                                    <th>حالة التأكيد</th>
+                                    <th>الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in today_assignments %}
+                                <tr>
+                                    <td><i class="fas fa-broadcast-tower text-primary"></i> {{ assignment.sonar.name }}</td>
+                                    <td>{{ assignment.shift }}</td>
+                                    <td>{{ assignment.assigned_at|date:"H:i" }}</td>
+                                    <td>
+                                        {% if assignment.supervisor_confirmed %}
+                                            <span class="badge bg-success"><i class="fas fa-check-double"></i> مؤكد كلياً</span>
+                                            <br><small class="text-muted">✅ موظف: {{ assignment.employee_confirmed_at|date:"H:i" }}</small>
+                                            <br><small class="text-muted">✅ مشرف: {{ assignment.supervisor_confirmed_at|date:"H:i" }}</small>
+                                        {% elif assignment.employee_confirmed %}
+                                            <span class="badge bg-info"><i class="fas fa-user-check"></i> بانتظار المشرف</span>
+                                            <br><small class="text-muted">✅ تأكيدك: {{ assignment.employee_confirmed_at|date:"H:i" }}</small>
+                                        {% else %}
+                                            <span class="badge bg-warning"><i class="fas fa-clock"></i> بانتظار تأكيدك</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if not assignment.employee_confirmed %}
+                                            <a href="{% url 'employee_confirm_assignment' assignment.pk %}" 
+                                               class="btn btn-success btn-sm"
+                                               onclick="return confirm('هل تؤكد أنك ذهبت للسونار {{ assignment.sonar.name }}؟')">
+                                                <i class="fas fa-check"></i> تأكيد الذهاب
+                                            </a>
+                                        {% elif not assignment.supervisor_confirmed %}
+                                            <span class="badge bg-secondary">
+                                                <i class="fas fa-hourglass-half"></i> تم تأكيدك
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle"></i> مكتمل
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle fa-3x mb-3"></i>
+                        <p>لا توجد تبديلات لك اليوم</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- إحصائيات هذا الأسبوع -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line"></i>
+                        إحصائيات هذا الأسبوع
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <span><i class="fas fa-exchange-alt text-primary"></i> إجمالي التبديلات:</span>
+                        <span class="badge bg-primary">{{ week_total }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-check-circle text-success"></i> المؤكدة:</span>
+                        <span class="badge bg-success">{{ week_confirmed }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i>
+                        معلومات الحساب
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p><strong><i class="fas fa-user"></i> الاسم:</strong> {{ employee.name }}</p>
+                    {% if employee.telegram_id %}
+                    <p><strong><i class="fab fa-telegram"></i> معرف تليجرام:</strong> {{ employee.telegram_id }}</p>
+                    {% endif %}
+                    {% if employee.is_on_leave %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-umbrella-beach"></i> أنت حالياً في إجازة
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> حالتك: نشط
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- آخر 10 تبديلات -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i>
+                        آخر تبديلاتك
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>التاريخ</th>
+                                    <th>الوقت</th>
+                                    <th>السونار</th>
+                                    <th>الشفت</th>
+                                    <th>الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in recent_assignments %}
+                                <tr>
+                                    <td>{{ assignment.assigned_at|date:"Y-m-d" }}</td>
+                                    <td>{{ assignment.assigned_at|date:"H:i" }}</td>
+                                    <td>{{ assignment.sonar.name }}</td>
+                                    <td>{{ assignment.shift }}</td>
+                                    <td>
+                                        {% if assignment.confirmed %}
+                                            <span class="badge bg-success">مؤكد</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">معلق</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">لا توجد تبديلات سابقة</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,374 @@
+{% extends 'base.html' %}
+
+{% block title %}لوحة تحكم المشرف{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- ترحيب -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <h4 class="mb-0">
+                    <i class="fas fa-user-cog"></i>
+                    مرحباً {{ user.first_name|default:user.username }} - مشرف 🔧
+                </h4>
+                {% if user.supervisor_profile.assigned_shift %}
+                <p class="mb-0 mt-2">
+                    <strong>الشفت المسؤول عنه:</strong> 
+                    <span class="badge bg-primary">{{ user.supervisor_profile.assigned_shift }}</span>
+                </p>
+                {% else %}
+                <p class="mb-0 mt-2 text-warning">
+                    <i class="fas fa-exclamation-triangle"></i> لم يتم تحديد شفت لك بعد - يرجى التواصل مع المدير
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- إحصائيات -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">بانتظار الموظف</h6>
+                            <h2 class="mb-0">{{ waiting_employee_count }}</h2>
+                        </div>
+                        <i class="fas fa-clock fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">بانتظار المشرف</h6>
+                            <h2 class="mb-0">{{ waiting_supervisor_count }}</h2>
+                        </div>
+                        <i class="fas fa-user-check fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">مؤكد كلياً</h6>
+                            <h2 class="mb-0">{{ fully_confirmed_count }}</h2>
+                        </div>
+                        <i class="fas fa-check-double fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">إجمالي التبديلات</h6>
+                            <h2 class="mb-0">{{ all_assignments|length }}</h2>
+                        </div>
+                        <i class="fas fa-list fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- إحصائيات إضافية -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">موظفين في إجازة</h6>
+                            <h2 class="mb-0">{{ employees_on_leave }}</h2>
+                        </div>
+                        <i class="fas fa-umbrella-beach fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-success text-white" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">سونار نشط</h6>
+                            <h2 class="mb-0">{{ active_sonars }}</h2>
+                        </div>
+                        <i class="fas fa-satellite-dish fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">سونار معطل</h6>
+                            <h2 class="mb-0">{{ inactive_sonars }}</h2>
+                        </div>
+                        <i class="fas fa-exclamation-triangle fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card text-white" style="background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-subtitle mb-2">مؤكد اليوم</h6>
+                            <h2 class="mb-0">{{ confirmed_today }}</h2>
+                        </div>
+                        <i class="fas fa-calendar-check fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- التبديلات المؤكدة من الموظفين (بانتظار تأكيد المشرف) -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-check"></i>
+                        تبديلات بانتظار تأكيدك
+                        <span class="badge bg-light text-primary ms-2">{{ waiting_supervisor_confirmation|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if waiting_supervisor_confirmation %}
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        هذه التبديلات قام الموظفون بتأكيد ذهابهم للسونار، تحتاج لتأكيدك النهائي
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>الموظف</th>
+                                    <th>السونار</th>
+                                    <th>الشفت</th>
+                                    <th>وقت التعيين</th>
+                                    <th>وقت تأكيد الموظف</th>
+                                    <th>الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in waiting_supervisor_confirmation %}
+                                <tr class="table-info">
+                                    <td>
+                                        <i class="fas fa-user text-primary"></i> 
+                                        <strong>{{ assignment.employee.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <i class="fas fa-satellite-dish text-primary"></i> 
+                                        {{ assignment.sonar.name }}
+                                    </td>
+                                    <td>{{ assignment.shift }}</td>
+                                    <td>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i>
+                                            {{ assignment.employee_confirmed_at|date:"H:i" }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'supervisor_confirm_assignment' assignment.pk %}" 
+                                           class="btn btn-success btn-sm"
+                                           onclick="return confirm('هل تؤكد على ذهاب {{ assignment.employee.name }} للسونار {{ assignment.sonar.name }}؟')">
+                                            <i class="fas fa-check-double"></i> تأكيد
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success text-center">
+                        <i class="fas fa-check-circle fa-3x mb-3"></i>
+                        <p>لا توجد تبديلات بانتظار تأكيدك</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- جميع التبديلات -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i>
+                        جميع التبديلات
+                        <span class="badge bg-light text-dark ms-2">{{ all_assignments|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if all_assignments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>الموظف</th>
+                                    <th>السونار</th>
+                                    <th>الشفت</th>
+                                    <th>وقت التعيين</th>
+                                    <th>حالة التأكيد</th>
+                                    <th>الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in all_assignments %}
+                                <tr {% if assignment.supervisor_confirmed %}class="table-success"{% elif assignment.employee_confirmed %}class="table-info"{% else %}class="table-warning"{% endif %}>
+                                    <td>
+                                        <i class="fas fa-user"></i>
+                                        <strong>{{ assignment.employee.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <i class="fas fa-satellite-dish"></i>
+                                        {{ assignment.sonar.name }}
+                                    </td>
+                                    <td>{{ assignment.shift }}</td>
+                                    <td>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</td>
+                                    <td>
+                                        {% if assignment.supervisor_confirmed %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-double"></i> مؤكد كلياً
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">
+                                                ✅ موظف: {{ assignment.employee_confirmed_at|date:"H:i" }}
+                                            </small>
+                                            <br>
+                                            <small class="text-muted">
+                                                ✅ مشرف: {{ assignment.supervisor_confirmed_at|date:"H:i" }}
+                                            </small>
+                                        {% elif assignment.employee_confirmed %}
+                                            <span class="badge bg-info">
+                                                <i class="fas fa-user-check"></i> بانتظار المشرف
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">
+                                                ✅ موظف: {{ assignment.employee_confirmed_at|date:"H:i" }}
+                                            </small>
+                                        {% else %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-clock"></i> بانتظار الموظف
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if assignment.employee_confirmed and not assignment.supervisor_confirmed %}
+                                            <a href="{% url 'supervisor_confirm_assignment' assignment.pk %}" 
+                                               class="btn btn-success btn-sm"
+                                               onclick="return confirm('هل تؤكد على ذهاب {{ assignment.employee.name }} للسونار {{ assignment.sonar.name }}؟')">
+                                                <i class="fas fa-check-double"></i> تأكيد
+                                            </a>
+                                        {% elif assignment.supervisor_confirmed %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle"></i> مكتمل
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="fas fa-hourglass-half"></i> انتظار الموظف
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle fa-3x mb-3"></i>
+                        <p>لا توجد تبديلات حالياً</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- قوائم سريعة -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog"></i>
+                        الإدارة السريعة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{% url 'pending_assignments_list' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-tasks"></i> التبديلات المعلقة
+                            <span class="badge bg-warning rounded-pill float-end">{{ pending_assignments }}</span>
+                        </a>
+                        <a href="{% url 'employee_list' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-users"></i> إدارة الموظفين
+                        </a>
+                        <a href="{% url 'sonar_list' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-broadcast-tower"></i> إدارة السونارات
+                            <span class="badge bg-success rounded-pill float-end">{{ active_sonars }}</span>
+                        </a>
+                        <a href="{% url 'reports' %}" class="list-group-item list-group-item-action">
+                            <i class="fas fa-chart-bar"></i> التقارير
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history"></i>
+                        نشاطك اليوم
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>التبديلات المؤكدة:</span>
+                        <span class="badge bg-success">{{ confirmed_today }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>التبديلات المعلقة:</span>
+                        <span class="badge bg-warning">{{ pending_assignments }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>الموظفين في إجازة:</span>
+                        <span class="badge bg-info">{{ employees_on_leave }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

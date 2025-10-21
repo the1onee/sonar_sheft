@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+
+{% block title %}التبديلات المعلقة - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-sm {
+        padding: 5px 15px;
+        font-size: 0.875rem;
+    }
+    
+    .shift-badge {
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .shift-morning {
+        background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        color: white;
+    }
+    
+    .shift-evening {
+        background: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+        color: white;
+    }
+    
+    .shift-night {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: white;
+    }
+    
+    .pending-badge {
+        background: #FEF3C7;
+        color: #92400E;
+        padding: 6px 15px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <!-- إحصائيات -->
+        <div class="stats-card">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="stat-item">
+                        <i class="fas fa-hourglass-half fa-2x"></i>
+                        <div class="stat-number">{{ total_pending }}</div>
+                        <div class="stat-label">تبديل معلق</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-item">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                        <div class="stat-number">{{ confirmed_today }}</div>
+                        <div class="stat-label">تم تأكيده اليوم</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-item">
+                        <i class="fas fa-times-circle fa-2x"></i>
+                        <div class="stat-number">{{ rejected_today }}</div>
+                        <div class="stat-label">تم رفضه اليوم</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span><i class="fas fa-hourglass-half"></i> التبديلات المعلقة</span>
+                    {% if total_pending > 0 %}
+                    <form method="post" action="{% url 'bulk_confirm_assignments' %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('هل أنت متأكد من تأكيد جميع التبديلات المعلقة ({{ total_pending }})?')">
+                            <i class="fas fa-check-double"></i> تأكيد الكل ({{ total_pending }})
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if pending_assignments %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-user"></i> الموظف</th>
+                                <th><i class="fas fa-satellite-dish"></i> السونار الجديد</th>
+                                <th><i class="fas fa-clock"></i> الشفت</th>
+                                <th><i class="fas fa-calendar"></i> وقت التبديل</th>
+                                <th><i class="fas fa-info-circle"></i> الحالة</th>
+                                <th><i class="fas fa-cogs"></i> الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in pending_assignments %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <strong>{{ assignment.employee.name }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-satellite-dish"></i> {{ assignment.sonar.name }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if assignment.shift.name == 'morning' %}
+                                        <span class="shift-badge shift-morning">
+                                            <i class="fas fa-sun"></i> صباحي
+                                        </span>
+                                    {% elif assignment.shift.name == 'evening' %}
+                                        <span class="shift-badge shift-evening">
+                                            <i class="fas fa-cloud-sun"></i> مسائي
+                                        </span>
+                                    {% elif assignment.shift.name == 'night' %}
+                                        <span class="shift-badge shift-night">
+                                            <i class="fas fa-moon"></i> ليلي
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                                <td>
+                                    <span class="pending-badge">
+                                        <i class="fas fa-hourglass-half"></i> معلق
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'confirm_assignment' assignment.pk %}" class="btn btn-success btn-sm">
+                                            <i class="fas fa-check"></i> تأكيد
+                                        </a>
+                                        <a href="{% url 'reject_assignment' assignment.pk %}" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-times"></i> رفض
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-check-double fa-4x mb-3" style="opacity: 0.3; color: #10B981;"></i>
+                    <p class="text-muted">لا يوجد تبديلات معلقة! جميع التبديلات تم معالجتها ✅</p>
+                    <a href="{% url 'confirmed_assignments_list' %}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> عرض التبديلات المؤكدة
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-4">
+            <i class="fas fa-info-circle"></i>
+            <strong>ملاحظة:</strong> التبديلات المعلقة هي التبديلات التي تم إنشاؤها بواسطة النظام ولكن لم يتم تأكيدها من قبل المشرف بعد.
+            عند التأكيد، سيتم إرسال إشعار Telegram للموظف.
+        </div>
+    </div>
+</div>
+{% endblock %}
+

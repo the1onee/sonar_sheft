@@ -1,0 +1,18 @@
+[Unit]
+Description=Celery Worker للسونار
+After=network.target redis.service
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/shift_manager
+Environment="PATH=/var/www/shift_manager/venv/bin"
+ExecStart=/var/www/shift_manager/venv/bin/celery -A shift_manager worker --detach --loglevel=info --logfile=/var/log/celery/worker.log --pidfile=/var/run/celery/worker.pid
+ExecStop=/bin/kill -s TERM $MAINPID
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}قائمة السونارات - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-sm {
+        padding: 5px 15px;
+        font-size: 0.875rem;
+    }
+    
+    .status-badge {
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .status-active {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+    }
+    
+    .status-inactive {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        color: white;
+    }
+    
+    .card-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .capacity-badge {
+        background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+        color: white;
+        padding: 5px 12px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span><i class="fas fa-satellite-dish"></i> قائمة السونارات</span>
+                    <a href="{% url 'sonar_create' %}" class="btn btn-light btn-sm">
+                        <i class="fas fa-plus"></i> إضافة سونار جديد
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if sonars %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-satellite-dish"></i> اسم السونار</th>
+                                <th><i class="fas fa-users"></i> السعة</th>
+                                <th><i class="fas fa-info-circle"></i> الحالة</th>
+                                <th><i class="fas fa-cogs"></i> الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sonar in sonars %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td><strong>{{ sonar.name }}</strong></td>
+                                <td>
+                                    <span class="capacity-badge">
+                                        <i class="fas fa-user"></i> {{ sonar.max_employees }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if sonar.active %}
+                                        <span class="status-badge status-active">
+                                            <i class="fas fa-check-circle"></i> نشط
+                                        </span>
+                                    {% else %}
+                                        <span class="status-badge status-inactive">
+                                            <i class="fas fa-times-circle"></i> غير نشط
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'sonar_update' sonar.pk %}" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-edit"></i> تعديل
+                                        </a>
+                                        <a href="{% url 'sonar_delete' sonar.pk %}" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash"></i> حذف
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-satellite-dish fa-4x mb-3" style="opacity: 0.3; color: #6B7280;"></i>
+                    <p class="text-muted">لا يوجد سونارات مسجلة</p>
+                    <a href="{% url 'sonar_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> إضافة أول سونار
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

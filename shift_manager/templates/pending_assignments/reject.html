@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}رفض تبديل - نظام إدارة الورديات{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-times-circle"></i> رفض التبديل
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-ban fa-4x text-danger mb-3"></i>
+                            <h5>هل أنت متأكد من رفض هذا التبديل؟</h5>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <strong><i class="fas fa-info-circle"></i> تفاصيل التبديل:</strong>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong><i class="fas fa-user"></i> الموظف:</strong> {{ assignment.employee.name }}</p>
+                                    <p class="mb-2"><strong><i class="fas fa-satellite-dish"></i> السونار:</strong> {{ assignment.sonar.name }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong><i class="fas fa-clock"></i> الشفت:</strong> 
+                                        {% if assignment.shift.name == 'morning' %}
+                                            <span class="badge bg-warning">صباحي</span>
+                                        {% elif assignment.shift.name == 'evening' %}
+                                            <span class="badge bg-orange">مسائي</span>
+                                        {% elif assignment.shift.name == 'night' %}
+                                            <span class="badge bg-primary">ليلي</span>
+                                        {% endif %}
+                                    </p>
+                                    <p class="mb-2"><strong><i class="fas fa-calendar"></i> وقت التبديل:</strong> {{ assignment.assigned_at|date:"Y-m-d H:i" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <form method="post">
+                            {% csrf_token %}
+                            
+                            <div class="mb-3">
+                                <label for="notes" class="form-label">
+                                    <i class="fas fa-comment"></i> سبب الرفض (اختياري)
+                                </label>
+                                <textarea 
+                                    name="notes" 
+                                    id="notes" 
+                                    class="form-control" 
+                                    rows="3" 
+                                    placeholder="اكتب سبب رفض التبديل (سيظهر في إشعار Telegram للموظف)"></textarea>
+                            </div>
+                            
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <strong>تحذير:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>سيتم رفض هذا التبديل نهائياً</li>
+                                    <li>سيتم إرسال إشعار Telegram للموظف بالرفض</li>
+                                    <li>سيتم تسجيل الرفض مع التاريخ والسبب</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="fas fa-times"></i> نعم، ارفض التبديل
+                                </button>
+                                <a href="{% url 'pending_assignments_list' %}" class="btn btn-secondary">
+                                    <i class="fas fa-arrow-left"></i> إلغاء
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

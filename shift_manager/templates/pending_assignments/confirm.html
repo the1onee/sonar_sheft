@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}تأكيد تبديل - نظام إدارة الورديات{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-check-circle"></i> تأكيد التبديل
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-exchange-alt fa-4x text-success mb-3"></i>
+                            <h5>هل أنت متأكد من تأكيد هذا التبديل؟</h5>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <strong><i class="fas fa-info-circle"></i> تفاصيل التبديل:</strong>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong><i class="fas fa-user"></i> الموظف:</strong> {{ assignment.employee.name }}</p>
+                                    <p class="mb-2"><strong><i class="fas fa-satellite-dish"></i> السونار الجديد:</strong> {{ assignment.sonar.name }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="mb-2"><strong><i class="fas fa-clock"></i> الشفت:</strong> 
+                                        {% if assignment.shift.name == 'morning' %}
+                                            <span class="badge bg-warning">صباحي</span>
+                                        {% elif assignment.shift.name == 'evening' %}
+                                            <span class="badge bg-orange">مسائي</span>
+                                        {% elif assignment.shift.name == 'night' %}
+                                            <span class="badge bg-primary">ليلي</span>
+                                        {% endif %}
+                                    </p>
+                                    <p class="mb-2"><strong><i class="fas fa-calendar"></i> وقت التبديل:</strong> {{ assignment.assigned_at|date:"Y-m-d H:i" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <form method="post">
+                            {% csrf_token %}
+                            
+                            <div class="mb-3">
+                                <label for="notes" class="form-label">
+                                    <i class="fas fa-comment"></i> ملاحظات (اختياري)
+                                </label>
+                                <textarea 
+                                    name="notes" 
+                                    id="notes" 
+                                    class="form-control" 
+                                    rows="3" 
+                                    placeholder="أضف أي ملاحظات إضافية للموظف (ستظهر في إشعار Telegram)"></textarea>
+                            </div>
+                            
+                            <div class="alert alert-success">
+                                <i class="fas fa-paper-plane"></i>
+                                <strong>بعد التأكيد:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>سيتم تأكيد التبديل في النظام</li>
+                                    <li>سيتم إرسال إشعار Telegram للموظف</li>
+                                    <li>سيتم تسجيل التأكيد مع التاريخ والوقت</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-check"></i> نعم، أكّد التبديل
+                                </button>
+                                <a href="{% url 'pending_assignments_list' %}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> إلغاء
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

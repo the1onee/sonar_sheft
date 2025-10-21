@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}إرسال إشعار{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4><i class="fas fa-paper-plane"></i> إرسال إشعار للموظفين</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="notification-form">
+                        {% csrf_token %}
+                        
+                        <!-- عنوان الإشعار -->
+                        <div class="mb-3">
+                            <label for="id_title" class="form-label">{{ form.title.label }}</label>
+                            {{ form.title }}
+                            {% if form.title.errors %}
+                                <div class="text-danger">{{ form.title.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- نص الإشعار -->
+                        <div class="mb-3">
+                            <label for="id_message" class="form-label">{{ form.message.label }}</label>
+                            {{ form.message }}
+                            <small class="form-text text-muted">سيتم إرسال هذا النص كما هو للموظفين</small>
+                            {% if form.message.errors %}
+                                <div class="text-danger">{{ form.message.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- إرسال للجميع -->
+                        <div class="mb-3 form-check">
+                            {{ form.send_to_all }}
+                            <label class="form-check-label" for="id_send_to_all">
+                                {{ form.send_to_all.label }}
+                            </label>
+                        </div>
+                        
+                        <!-- اختيار موظفين محددين -->
+                        <div class="mb-3" id="employees-section">
+                            <label class="form-label">{{ form.target_employees.label }}</label>
+                            <div class="border p-3" style="max-height: 300px; overflow-y: auto;">
+                                {% for choice in form.target_employees %}
+                                    <div class="form-check">
+                                        {{ choice.tag }}
+                                        <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                            {{ choice.choice_label }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            {% if form.target_employees.errors %}
+                                <div class="text-danger">{{ form.target_employees.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- أزرار التحكم -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'custom_notifications_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> إرسال الإشعار
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- معاينة الإشعار -->
+            <div class="card shadow mt-3">
+                <div class="card-header bg-info text-white">
+                    <h5><i class="fas fa-eye"></i> معاينة الإشعار</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-light border">
+                        <h6 id="preview-title" class="text-primary">عنوان الإشعار</h6>
+                        <p id="preview-message" class="mb-0">نص الإشعار سيظهر هنا...</p>
+                        <hr>
+                        <small class="text-muted">
+                            <i class="fas fa-user"></i> من: {{ request.user.get_full_name|default:request.user.username }}<br>
+                            <i class="fas fa-clock"></i> الآن
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // إخفاء/إظهار قسم الموظفين حسب الاختيار
+    const sendToAllCheckbox = document.getElementById('id_send_to_all');
+    const employeesSection = document.getElementById('employees-section');
+    
+    function toggleEmployeesSection() {
+        if (sendToAllCheckbox.checked) {
+            employeesSection.style.display = 'none';
+        } else {
+            employeesSection.style.display = 'block';
+        }
+    }
+    
+    sendToAllCheckbox.addEventListener('change', toggleEmployeesSection);
+    toggleEmployeesSection(); // تشغيل عند التحميل
+    
+    // معاينة حية للإشعار
+    const titleInput = document.getElementById('id_title');
+    const messageInput = document.getElementById('id_message');
+    const previewTitle = document.getElementById('preview-title');
+    const previewMessage = document.getElementById('preview-message');
+    
+    titleInput.addEventListener('input', function() {
+        previewTitle.textContent = this.value || 'عنوان الإشعار';
+    });
+    
+    messageInput.addEventListener('input', function() {
+        previewMessage.textContent = this.value || 'نص الإشعار سيظهر هنا...';
+    });
+</script>
+{% endblock %}
+

@@ -1,0 +1,483 @@
+{% extends 'base.html' %}
+
+{% block title %}التقارير - نظام إدارة السونار{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .stat-box {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .stat-box:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stat-box.total {
+        border-color: #4F46E5;
+    }
+    
+    .stat-box.confirmed {
+        border-color: #10B981;
+    }
+    
+    .stat-box.pending {
+        border-color: #F59E0B;
+    }
+    
+    .stat-icon {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 900;
+        margin: 10px 0;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6B7280;
+        font-weight: 600;
+    }
+    
+    .filter-card {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+    }
+    
+    .filter-title {
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: #1F2937;
+    }
+    
+    .chart-container {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 30px;
+    }
+    
+    .chart-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: #1F2937;
+    }
+    
+    .progress-bar-container {
+        margin-bottom: 15px;
+    }
+    
+    .progress-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+        font-size: 0.9rem;
+    }
+    
+    .progress {
+        height: 25px;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .progress-bar {
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .badge-confirmed {
+        background: #D1FAE5;
+        color: #065F46;
+        padding: 5px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .badge-pending {
+        background: #FEF3C7;
+        color: #92400E;
+        padding: 5px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .table-container {
+        background: white;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+    }
+    
+    .export-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        padding: 15px;
+        background: #F9FAFB;
+        border-radius: 10px;
+        border: 1px solid #E5E7EB;
+    }
+    
+    .btn-excel {
+        background: #10B981 !important;
+        border: none;
+        color: white !important;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-excel:hover {
+        background: #059669 !important;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
+    }
+    
+    .btn-pdf {
+        background: #EF4444 !important;
+        border: none;
+        color: white !important;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-pdf:hover {
+        background: #DC2626 !important;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <!-- العنوان -->
+        <div class="mb-4">
+            <h2 style="font-weight: 900; color: #1F2937;">
+                <i class="fas fa-chart-line"></i> التقارير والإحصائيات
+            </h2>
+            <p style="color: #6B7280;">تقارير شاملة عن التبديلات والإسنادات</p>
+        </div>
+        
+        <!-- الإحصائيات الرئيسية -->
+        <div class="stats-grid">
+            <div class="stat-box total">
+                <div class="stat-icon" style="color: #4F46E5;">
+                    <i class="fas fa-list"></i>
+                </div>
+                <div class="stat-number" style="color: #4F46E5;">{{ total_count }}</div>
+                <div class="stat-label">إجمالي النتائج</div>
+            </div>
+            
+            <div class="stat-box confirmed">
+                <div class="stat-icon" style="color: #10B981;">
+                    <i class="fas fa-check-double"></i>
+                </div>
+                <div class="stat-number" style="color: #10B981;">{{ total_confirmed }}</div>
+                <div class="stat-label">مؤكد كلياً (✅✅)</div>
+            </div>
+            
+            <div class="stat-box" style="border-color: #F59E0B;">
+                <div class="stat-icon" style="color: #F59E0B;">
+                    <i class="fas fa-user-clock"></i>
+                </div>
+                <div class="stat-number" style="color: #F59E0B;">{{ waiting_employee }}</div>
+                <div class="stat-label">بانتظار الموظف</div>
+            </div>
+            
+            <div class="stat-box" style="border-color: #3B82F6;">
+                <div class="stat-icon" style="color: #3B82F6;">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <div class="stat-number" style="color: #3B82F6;">{{ waiting_supervisor }}</div>
+                <div class="stat-label">بانتظار المشرف</div>
+            </div>
+        </div>
+        
+        <!-- فلاتر البحث -->
+        <div class="filter-card">
+            <div class="filter-title">
+                <i class="fas fa-filter"></i> فلترة التقارير
+            </div>
+            <form method="get" action="{% url 'reports' %}">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">الشفت</label>
+                        <select name="shift" class="form-control">
+                            <option value="">الكل</option>
+                            {% for shift in all_shifts %}
+                            <option value="{{ shift.name }}" {% if shift_filter == shift.name %}selected{% endif %}>
+                                {{ shift }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">من تاريخ</label>
+                        <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">إلى تاريخ</label>
+                        <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">الحالة</label>
+                        <select name="status" class="form-control">
+                            <option value="">الكل</option>
+                            <option value="confirmed" {% if status_filter == 'confirmed' %}selected{% endif %}>✅✅ مؤكد كلياً</option>
+                            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>⏰ معلق</option>
+                            <option value="waiting_employee" {% if status_filter == 'waiting_employee' %}selected{% endif %}>⏰ بانتظار الموظف</option>
+                            <option value="waiting_supervisor" {% if status_filter == 'waiting_supervisor' %}selected{% endif %}>⏳ بانتظار المشرف</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> بحث
+                    </button>
+                    <a href="{% url 'reports' %}" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> إعادة تعيين
+                    </a>
+                </div>
+            </form>
+            
+            <!-- أزرار التصدير -->
+            <div class="export-buttons">
+                <div>
+                    <strong style="color: #1F2937; margin-left: 15px;">
+                        <i class="fas fa-download"></i> تصدير التقرير:
+                    </strong>
+                </div>
+                <a href="{% url 'export_reports_excel' %}?{{ request.GET.urlencode }}" class="btn btn-excel">
+                    <i class="fas fa-file-excel"></i> تحميل Excel
+                </a>
+                <a href="{% url 'export_reports_pdf' %}?{{ request.GET.urlencode }}" class="btn btn-pdf">
+                    <i class="fas fa-file-pdf"></i> تحميل PDF
+                </a>
+            </div>
+        </div>
+        
+        <div class="row">
+            <!-- إحصائيات الورديات -->
+            <div class="col-md-6 mb-4">
+                <div class="chart-container">
+                    <div class="chart-title">
+                        <i class="fas fa-clock"></i> إحصائيات الورديات
+                    </div>
+                    {% for stat in shifts_stats %}
+                    <div class="progress-bar-container">
+                        <div class="progress-label">
+                            <span><strong>
+                                {% if stat.shift__name == 'morning' %}
+                                    صباحي
+                                {% elif stat.shift__name == 'evening' %}
+                                    مسائي
+                                {% elif stat.shift__name == 'night' %}
+                                    ليلي
+                                {% else %}
+                                    {{ stat.shift__name }}
+                                {% endif %}
+                            </strong></span>
+                            <span>{{ stat.total }} تبديل</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" style="width: {% widthratio stat.confirmed stat.total 100 %}%">
+                                مؤكد: {{ stat.confirmed }}
+                            </div>
+                            <div class="progress-bar bg-warning" style="width: {% widthratio stat.pending stat.total 100 %}%">
+                                معلق: {{ stat.pending }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- أكثر الموظفين نشاطاً -->
+            <div class="col-md-6 mb-4">
+                <div class="chart-container">
+                    <div class="chart-title">
+                        <i class="fas fa-users"></i> أكثر الموظفين نشاطاً
+                    </div>
+                    {% for stat in employees_stats %}
+                    <div class="progress-bar-container">
+                        <div class="progress-label">
+                            <span><strong>{{ stat.employee__name }}</strong></span>
+                            <span>{{ stat.total }} تبديل</span>
+                        </div>
+                        <div class="progress">
+                            {% if stat.total > 0 %}
+                            <div class="progress-bar bg-success" style="width: {% widthratio stat.confirmed stat.total 100 %}%">
+                                {{ stat.confirmed }} مؤكد
+                            </div>
+                            <div class="progress-bar bg-warning" style="width: {% widthratio stat.total stat.total 100 %}%; width: calc(100% - {% widthratio stat.confirmed stat.total 100 %}%);">
+                                معلق
+                            </div>
+                            {% else %}
+                            <div class="progress-bar bg-secondary" style="width: 100%">لا توجد تبديلات</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">لا توجد بيانات</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- أكثر السونارات استخداماً -->
+        <div class="chart-container">
+            <div class="chart-title">
+                <i class="fas fa-satellite-dish"></i> أكثر السونارات استخداماً
+            </div>
+            <div class="row">
+                {% for stat in sonars_stats %}
+                <div class="col-md-6 mb-3">
+                    <div class="progress-bar-container">
+                        <div class="progress-label">
+                            <span><strong>{{ stat.sonar__name }}</strong></span>
+                            <span>{{ stat.total }} تبديل ({{ stat.confirmed }} مؤكد)</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-primary" style="width: {% widthratio stat.total sonars_stats.0.total 100 %}%">
+                                {{ stat.total }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12">
+                    <p class="text-muted text-center">لا توجد بيانات</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- جدول التبديلات -->
+        <div class="table-container">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-table"></i> التبديلات ({{ total_count }} سجل)
+                </h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الموظف</th>
+                            <th>السونار</th>
+                            <th>الشفت</th>
+                            <th>التاريخ والوقت</th>
+                            <th>تأكيد الموظف</th>
+                            <th>تأكيد المشرف</th>
+                            <th>المشرف</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in assignments %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><strong>{{ assignment.employee.name }}</strong></td>
+                            <td>{{ assignment.sonar.name }}</td>
+                            <td>
+                                {% if assignment.shift.name == 'morning' %}
+                                    <span class="badge bg-warning">صباحي</span>
+                                {% elif assignment.shift.name == 'evening' %}
+                                    <span class="badge" style="background: #F59E0B;">مسائي</span>
+                                {% elif assignment.shift.name == 'night' %}
+                                    <span class="badge bg-primary">ليلي</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</small></td>
+                            <td>
+                                {% if assignment.employee_confirmed_at %}
+                                    <small class="text-success">
+                                        <i class="fas fa-check"></i>
+                                        {{ assignment.employee_confirmed_at|date:"Y-m-d H:i" }}
+                                    </small>
+                                {% else %}
+                                    <small class="text-muted">لم يؤكد</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if assignment.supervisor_confirmed_at %}
+                                    <small class="text-success">
+                                        <i class="fas fa-check-double"></i>
+                                        {{ assignment.supervisor_confirmed_at|date:"Y-m-d H:i" }}
+                                    </small>
+                                {% else %}
+                                    <small class="text-muted">لم يؤكد</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if assignment.supervisor_confirmed_by %}
+                                    <small>{{ assignment.supervisor_confirmed_by.first_name|default:assignment.supervisor_confirmed_by.username }}</small>
+                                {% else %}
+                                    <small class="text-muted">-</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if assignment.supervisor_confirmed %}
+                                    <span class="badge-confirmed">✅✅ مؤكد كلياً</span>
+                                {% elif assignment.employee_confirmed %}
+                                    <span class="badge" style="background: #DBEAFE; color: #1E40AF; padding: 5px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">
+                                        ⏳ بانتظار المشرف
+                                    </span>
+                                {% else %}
+                                    <span class="badge-pending">⏰ بانتظار الموظف</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block" style="opacity: 0.3;"></i>
+                                لا توجد نتائج
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% if total_count > 100 %}
+        <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle"></i>
+            يتم عرض أول 100 سجل فقط. استخدم الفلاتر لتضييق النتائج.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

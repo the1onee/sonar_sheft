@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}حذف موظف - نظام إدارة الورديات{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-exclamation-triangle"></i> تأكيد الحذف
+                        </h4>
+                    </div>
+                    <div class="card-body text-center">
+                        <i class="fas fa-user-times fa-4x text-danger mb-3"></i>
+                        <h5 class="mb-3">هل أنت متأكد من حذف هذا الموظف؟</h5>
+                        <div class="alert alert-warning text-start">
+                            <strong><i class="fas fa-user"></i> الاسم:</strong> {{ employee.name }}<br>
+                            {% if employee.telegram_id %}
+                            <strong><i class="fab fa-telegram"></i> Telegram:</strong> {{ employee.telegram_id }}<br>
+                            {% endif %}
+                            <strong><i class="fas fa-info-circle"></i> الحالة:</strong> 
+                            {% if employee.is_on_leave %}
+                                في إجازة
+                            {% else %}
+                                نشط
+                            {% endif %}
+                        </div>
+                        <p class="text-danger">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <strong>تحذير:</strong> هذا الإجراء لا يمكن التراجع عنه!
+                        </p>
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> نعم، احذف
+                            </button>
+                            <a href="{% url 'employee_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> إلغاء
+                            </a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

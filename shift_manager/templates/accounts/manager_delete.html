@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}حذف مدير{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="fas fa-trash"></i> تأكيد الحذف</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>تحذير!</strong> هل أنت متأكد من حذف المدير؟
+                    </div>
+
+                    <dl class="row">
+                        <dt class="col-sm-4">الاسم:</dt>
+                        <dd class="col-sm-8">{{ manager.name }}</dd>
+
+                        <dt class="col-sm-4">اسم المستخدم:</dt>
+                        <dd class="col-sm-8">{{ manager.user.username }}</dd>
+
+                        <dt class="col-sm-4">رقم الهاتف:</dt>
+                        <dd class="col-sm-8">{{ manager.phone|default:"—" }}</dd>
+                    </dl>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'manager_accounts_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> حذف
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

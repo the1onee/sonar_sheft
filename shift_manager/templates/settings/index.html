@@ -1,0 +1,320 @@
+{% extends 'base.html' %}
+{% block title %}إعدادات النظام - نظام إدارة السونار{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        padding: 30px;
+        color: white;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    
+    .settings-section {
+        background: white;
+        border-radius: 15px;
+        padding: 30px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 25px;
+    }
+    
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 20px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        border-right: 4px solid #667eea;
+    }
+    
+    .info-label {
+        color: #6c757d;
+        font-size: 14px;
+        font-weight: 500;
+    }
+    
+    .info-value {
+        color: #212529;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    
+    .form-group {
+        margin-bottom: 25px;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .form-control {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        padding: 12px 15px;
+        transition: all 0.3s;
+    }
+    
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+    }
+    
+    .help-text {
+        font-size: 13px;
+        color: #6c757d;
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        padding: 14px 40px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 16px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-save:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+    
+    .section-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #212529;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .section-title i {
+        color: #667eea;
+    }
+    
+    .form-check {
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin-top: 10px;
+    }
+    
+    .form-check-input {
+        width: 20px;
+        height: 20px;
+        margin-left: 10px;
+    }
+    
+    .form-check-label {
+        font-weight: 600;
+        color: #212529;
+    }
+    
+    .last-update {
+        background: #e7f3ff;
+        border-radius: 10px;
+        padding: 15px 20px;
+        color: #004085;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <!-- Header -->
+        <div class="settings-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-2"><i class="fas fa-cog"></i> إعدادات النظام</h2>
+                    <p class="mb-0 opacity-75">إدارة إعدادات التبديل التلقائي والإشعارات</p>
+                </div>
+                <div>
+                    {% if settings.is_rotation_active %}
+                        <span class="status-indicator status-active">
+                            <i class="fas fa-check-circle"></i> النظام نشط
+                        </span>
+                    {% else %}
+                        <span class="status-indicator status-inactive">
+                            <i class="fas fa-pause-circle"></i> النظام متوقف
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- الإعدادات الحالية -->
+        <div class="settings-section">
+            <h5 class="section-title">
+                <i class="fas fa-info-circle"></i> الإعدادات الحالية
+            </h5>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <div>
+                            <div class="info-label">فترة التبديل التلقائي</div>
+                            <div class="info-value">{{ settings.rotation_interval_hours }} ساعة</div>
+                        </div>
+                        <i class="fas fa-clock fa-2x text-primary"></i>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <div>
+                            <div class="info-label">الإشعار المبكر</div>
+                            <div class="info-value">{{ settings.early_notification_minutes }} دقيقة</div>
+                        </div>
+                        <i class="fas fa-bell fa-2x text-warning"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-row">
+                <div>
+                    <div class="info-label">التبديل التالي المتوقع</div>
+                    <div class="info-value">{{ next_rotation|date:"Y-m-d H:i" }}</div>
+                </div>
+                <i class="fas fa-calendar-alt fa-2x text-success"></i>
+            </div>
+        </div>
+        
+        <!-- تعديل الإعدادات -->
+        <div class="settings-section">
+            <h5 class="section-title">
+                <i class="fas fa-edit"></i> تعديل الإعدادات
+            </h5>
+            
+            <form method="POST">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-clock"></i>
+                                {{ form.rotation_interval_hours.label }}
+                            </label>
+                            {{ form.rotation_interval_hours }}
+                            <div class="help-text">
+                                <i class="fas fa-info-circle"></i>
+                                يمكنك استخدام أرقام عشرية (مثال: 2.5 = ساعتين ونصف)
+                            </div>
+                            {% if form.rotation_interval_hours.errors %}
+                                <div class="text-danger mt-2">{{ form.rotation_interval_hours.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-bell"></i>
+                                {{ form.early_notification_minutes.label }}
+                            </label>
+                            {{ form.early_notification_minutes }}
+                            <div class="help-text">
+                                <i class="fas fa-info-circle"></i>
+                                الوقت قبل التبديل لإرسال إشعار تنبيه للموظفين
+                            </div>
+                            {% if form.early_notification_minutes.errors %}
+                                <div class="text-danger mt-2">{{ form.early_notification_minutes.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="form-check">
+                        {{ form.is_rotation_active }}
+                        <label class="form-check-label" for="{{ form.is_rotation_active.id_for_label }}">
+                            <i class="fas fa-power-off"></i>
+                            {{ form.is_rotation_active.label }}
+                        </label>
+                    </div>
+                    {% if form.is_rotation_active.errors %}
+                        <div class="text-danger mt-2">{{ form.is_rotation_active.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-save">
+                        <i class="fas fa-save"></i> حفظ التعديلات
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- معلومات آخر تحديث -->
+        {% if settings.updated_by %}
+        <div class="last-update">
+            <i class="fas fa-history"></i>
+            <span>
+                آخر تحديث: <strong>{{ settings.updated_at|date:"Y-m-d H:i" }}</strong>
+                بواسطة: <strong>{{ settings.updated_by.first_name|default:settings.updated_by.username }}</strong>
+            </span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // تأثير الظهور التدريجي
+    const sections = document.querySelectorAll('.settings-section');
+    sections.forEach((section, index) => {
+        section.style.opacity = '0';
+        section.style.transform = 'translateY(20px)';
+        section.style.transition = 'all 0.5s ease';
+        
+        setTimeout(() => {
+            section.style.opacity = '1';
+            section.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+{% endblock %}

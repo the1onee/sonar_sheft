@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+
+{% block title %}قائمة الموظفين - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    
+    .btn-sm {
+        padding: 5px 10px;
+        font-size: 0.875rem;
+    }
+    
+    .status-badge {
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .status-active {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+    }
+    
+    .status-leave {
+        background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        color: white;
+    }
+    
+    .card-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .stats-row {
+        margin-top: 20px;
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 15px;
+    }
+    
+    .stat-card h3 {
+        margin: 0;
+        font-size: 2rem;
+    }
+    
+    .stat-card p {
+        margin: 5px 0 0 0;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <!-- Header -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <div>
+                        <span><i class="fas fa-users"></i> قائمة الموظفين</span>
+                        {% if user_role == 'supervisor' %}
+                        <br><small class="text-muted">موظفو شفتك فقط</small>
+                        {% else %}
+                        <br><small class="text-muted">جميع الموظفين في النظام</small>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'employee_create' %}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> إضافة موظف
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if employees %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-user"></i> الاسم</th>
+                                <th><i class="fas fa-key"></i> اسم المستخدم</th>
+                                <th><i class="fab fa-telegram"></i> Telegram</th>
+                                <th><i class="fas fa-shield-alt"></i> نوع الحساب</th>
+                                <th><i class="fas fa-info-circle"></i> الحالة</th>
+                                <th><i class="fas fa-cogs"></i> الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in employees_data %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td><strong>{{ data.employee.name }}</strong></td>
+                                <td>
+                                    {% if data.has_account %}
+                                        <span class="badge bg-info">
+                                            <i class="fas fa-key"></i> {{ data.employee.user.username }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if data.employee.telegram_id %}
+                                        <code>{{ data.employee.telegram_id }}</code>
+                                    {% else %}
+                                        <span class="text-muted">غير محدد</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if data.has_account %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check-circle"></i> لديه حساب
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-user-alt"></i> بدون حساب
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if data.employee.is_on_leave %}
+                                        <span class="status-badge status-leave">
+                                            <i class="fas fa-umbrella-beach"></i> في إجازة
+                                        </span>
+                                    {% else %}
+                                        <span class="status-badge status-active">
+                                            <i class="fas fa-check-circle"></i> نشط
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <!-- تعديل البيانات -->
+                                        <a href="{% url 'employee_update' data.employee.pk %}" 
+                                           class="btn btn-warning btn-sm"
+                                           title="تعديل البيانات">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        
+                                        <!-- حذف الحساب (إذا كان لديه حساب) -->
+                                        {% if data.has_account and can_manage_accounts %}
+                                        <a href="{% url 'employee_account_delete' data.employee.pk %}" 
+                                           class="btn btn-info btn-sm"
+                                           title="حذف الحساب فقط"
+                                           onclick="return confirm('هل تريد حذف حساب المستخدم؟ سيبقى الموظف بدون إمكانية تسجيل دخول.')">
+                                            <i class="fas fa-user-times"></i>
+                                        </a>
+                                        {% endif %}
+                                        
+                                        <!-- حذف الموظف -->
+                                        <a href="{% url 'employee_delete' data.employee.pk %}" 
+                                           class="btn btn-danger btn-sm"
+                                           title="حذف الموظف نهائياً"
+                                           onclick="return confirm('هل أنت متأكد؟ سيتم حذف الموظف وحسابه إن وجد!')">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-users fa-4x mb-3" style="opacity: 0.3; color: #6B7280;"></i>
+                    {% if user_role == 'supervisor' %}
+                    <p class="text-muted">لا يوجد موظفين مسندين لشفتك حالياً</p>
+                    <p class="text-muted small">يتم تحديد موظفي شفتك من خلال الجدولة الأسبوعية</p>
+                    {% else %}
+                    <p class="text-muted">لا يوجد موظفين مسجلين</p>
+                    <a href="{% url 'employee_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> إضافة أول موظف
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- إحصائيات -->
+        {% if employees %}
+        <div class="row stats-row">
+            <div class="col-md-4">
+                <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <h3>{{ employees.count }}</h3>
+                    <p>إجمالي الموظفين</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <h3>
+                        {% for d in employees_data %}{% if d.has_account %}{% endif %}{% endfor %}
+                        {{ employees_data|length|add:"0" }}
+                    </h3>
+                    <p>لديهم حسابات</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <h3>
+                        {% for e in employees %}{% if e.is_on_leave %}1{% endif %}{% endfor %}
+                        0
+                    </h3>
+                    <p>في إجازة</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}تسجيل الدخول - Assignment System{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-header">
+        <div class="icon-box">
+            <i class="fas fa-user-lock"></i>
+        </div>
+        <h1>تسجيل الدخول</h1>
+        <p>Assignment System</p>
+    </div>
+    
+    <div class="auth-body">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+            
+            <div class="mb-3">
+                <label for="{{ form.username.id_for_label }}" class="form-label">
+                    <i class="fas fa-user"></i> اسم المستخدم
+                </label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.username.errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+            
+            <div class="mb-4">
+                <label for="{{ form.password.id_for_label }}" class="form-label">
+                    <i class="fas fa-lock"></i> كلمة المرور
+                </label>
+                {{ form.password }}
+                {% if form.password.errors %}
+                    <ul class="errorlist">
+                        {% for error in form.password.errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+            
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="fas fa-sign-in-alt"></i> تسجيل الدخول
+            </button>
+        </form>
+    </div>
+    
+    <div class="auth-footer">
+        <a href="{% url 'landing' %}">
+            <i class="fas fa-home"></i> العودة للصفحة الرئيسية
+        </a>
+    </div>
+</div>
+{% endblock %}
+

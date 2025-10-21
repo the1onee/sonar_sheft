@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}قائمة الشفتات - نظام إدارة الشفتات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-sm {
+        padding: 5px 15px;
+        font-size: 0.875rem;
+    }
+    
+    .shift-badge {
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .shift-morning {
+        background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        color: white;
+    }
+    
+    .shift-evening {
+        background: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+        color: white;
+    }
+    
+    .shift-night {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: white;
+    }
+    
+    .card-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .time-badge {
+        background: #F3F4F6;
+        color: #1F2937;
+        padding: 5px 12px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span><i class="fas fa-clock"></i> قائمة الشفتات</span>
+                    <a href="{% url 'shift_create' %}" class="btn btn-light btn-sm">
+                        <i class="fas fa-plus"></i> إضافة شفت جديد
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if shifts %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-tag"></i> نوع الشفت</th>
+                                <th><i class="fas fa-clock"></i> أوقات العمل</th>
+                                <th><i class="fas fa-hourglass-half"></i> المدة</th>
+                                <th><i class="fas fa-cogs"></i> الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for shift in shifts %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    {% if shift.name == 'morning' %}
+                                        <span class="shift-badge shift-morning">
+                                            <i class="fas fa-sun"></i> صباحي
+                                        </span>
+                                    {% elif shift.name == 'evening' %}
+                                        <span class="shift-badge shift-evening">
+                                            <i class="fas fa-cloud-sun"></i> مسائي
+                                        </span>
+                                    {% elif shift.name == 'night' %}
+                                        <span class="shift-badge shift-night">
+                                            <i class="fas fa-moon"></i> ليلي
+                                        </span>
+                                    {% else %}
+                                        <span class="shift-badge">{{ shift }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="time-badge">
+                                        <i class="fas fa-play-circle"></i> {{ shift.start_hour }}:00
+                                    </span>
+                                    <i class="fas fa-arrow-left mx-2"></i>
+                                    <span class="time-badge">
+                                        <i class="fas fa-stop-circle"></i> {{ shift.end_hour }}:00
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if shift.end_hour > shift.start_hour %}
+                                        <strong>{{ shift.end_hour|add:"-"|add:shift.start_hour }}</strong> ساعات
+                                    {% else %}
+                                        <strong>{{ 24|add:shift.end_hour|add:"-"|add:shift.start_hour }}</strong> ساعات
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'shift_update' shift.pk %}" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-edit"></i> تعديل
+                                        </a>
+                                        <a href="{% url 'shift_delete' shift.pk %}" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash"></i> حذف
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-clock fa-4x mb-3" style="opacity: 0.3; color: #6B7280;"></i>
+                    <p class="text-muted">لا يوجد شفتات مسجلة</p>
+                    <a href="{% url 'shift_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> إضافة أول شفت
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}حذف موظف{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="fas fa-trash"></i> تأكيد الحذف</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>تحذير!</strong> هل أنت متأكد من حذف حساب الموظف؟
+                    </div>
+
+                    <dl class="row">
+                        <dt class="col-sm-4">الاسم:</dt>
+                        <dd class="col-sm-8">{{ employee.name }}</dd>
+
+                        <dt class="col-sm-4">اسم المستخدم:</dt>
+                        <dd class="col-sm-8">{{ employee.user.username }}</dd>
+
+                        <dt class="col-sm-4">معرف تليجرام:</dt>
+                        <dd class="col-sm-8">{{ employee.telegram_id|default:"—" }}</dd>
+                    </dl>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'employee_accounts_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> حذف
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,17 @@
+[Unit]
+Description=Celery Beat للسونار (المهام المجدولة)
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/shift_manager
+Environment="PATH=/var/www/shift_manager/venv/bin"
+ExecStart=/var/www/shift_manager/venv/bin/celery -A shift_manager beat --loglevel=info --logfile=/var/log/celery/beat.log --pidfile=/var/run/celery/beat.pid
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

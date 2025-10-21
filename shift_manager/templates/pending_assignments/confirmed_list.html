@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}التبديلات المؤكدة - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .confirmed-badge {
+        background: #D1FAE5;
+        color: #065F46;
+        padding: 6px 15px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .shift-badge {
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .shift-morning {
+        background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        color: white;
+    }
+    
+    .shift-evening {
+        background: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+        color: white;
+    }
+    
+    .shift-night {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span><i class="fas fa-check-circle text-success"></i> التبديلات المؤكدة</span>
+                    <a href="{% url 'pending_assignments_list' %}" class="btn btn-light btn-sm">
+                        <i class="fas fa-hourglass-half"></i> التبديلات المعلقة
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if confirmed_assignments %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-user"></i> الموظف</th>
+                                <th><i class="fas fa-satellite-dish"></i> السونار</th>
+                                <th><i class="fas fa-clock"></i> الشفت</th>
+                                <th><i class="fas fa-calendar"></i> وقت التبديل</th>
+                                <th><i class="fas fa-check"></i> تم التأكيد بواسطة</th>
+                                <th><i class="fas fa-calendar-check"></i> وقت التأكيد</th>
+                                <th><i class="fas fa-comment"></i> الملاحظات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for confirmation in confirmed_assignments %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <strong>{{ confirmation.assignment.employee.name }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-satellite-dish"></i> {{ confirmation.assignment.sonar.name }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if confirmation.assignment.shift.name == 'morning' %}
+                                        <span class="shift-badge shift-morning">
+                                            <i class="fas fa-sun"></i> صباحي
+                                        </span>
+                                    {% elif confirmation.assignment.shift.name == 'evening' %}
+                                        <span class="shift-badge shift-evening">
+                                            <i class="fas fa-cloud-sun"></i> مسائي
+                                        </span>
+                                    {% elif confirmation.assignment.shift.name == 'night' %}
+                                        <span class="shift-badge shift-night">
+                                            <i class="fas fa-moon"></i> ليلي
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ confirmation.assignment.assigned_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-user-shield"></i> {{ confirmation.confirmed_by.username }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <small>{{ confirmation.confirmed_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                                <td>
+                                    {% if confirmation.notes %}
+                                        <small class="text-muted">{{ confirmation.notes|truncatewords:5 }}</small>
+                                    {% else %}
+                                        <small class="text-muted">-</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-4x mb-3" style="opacity: 0.3; color: #6B7280;"></i>
+                    <p class="text-muted">لا يوجد تبديلات مؤكدة بعد</p>
+                    <a href="{% url 'pending_assignments_list' %}" class="btn btn-primary">
+                        <i class="fas fa-hourglass-half"></i> عرض التبديلات المعلقة
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="alert alert-success mt-4">
+            <i class="fas fa-check-circle"></i>
+            <strong>ملاحظة:</strong> هذه القائمة تعرض جميع التبديلات التي تم تأكيدها من قبل المشرفين. 
+            تم إرسال إشعارات Telegram لجميع الموظفين المذكورين.
+        </div>
+    </div>
+</div>
+{% endblock %}
+

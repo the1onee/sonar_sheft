@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+
+{% block title %}الجدولة الأسبوعية - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-sm {
+        padding: 5px 15px;
+        font-size: 0.875rem;
+    }
+    
+    .card-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .shift-badge {
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .shift-morning {
+        background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        color: white;
+    }
+    
+    .shift-evening {
+        background: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+        color: white;
+    }
+    
+    .shift-night {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: white;
+    }
+    
+    .employee-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .employee-badge {
+        background: #E0E7FF;
+        color: #4338CA;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .date-badge {
+        background: #F3F4F6;
+        color: #1F2937;
+        padding: 6px 15px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span><i class="fas fa-calendar-week"></i> الجدولة الأسبوعية</span>
+                    <a href="{% url 'weekly_schedule_create' %}" class="btn btn-light btn-sm">
+                        <i class="fas fa-plus"></i> إضافة جدولة جديدة
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if schedules %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-clock"></i> الشفت</th>
+                                <th><i class="fas fa-calendar"></i> فترة الأسبوع</th>
+                                <th><i class="fas fa-users"></i> الموظفين</th>
+                                <th><i class="fas fa-cogs"></i> الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in schedules %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    {% if schedule.shift.name == 'morning' %}
+                                        <span class="shift-badge shift-morning">
+                                            <i class="fas fa-sun"></i> صباحي
+                                        </span>
+                                    {% elif schedule.shift.name == 'evening' %}
+                                        <span class="shift-badge shift-evening">
+                                            <i class="fas fa-cloud-sun"></i> مسائي
+                                        </span>
+                                    {% elif schedule.shift.name == 'night' %}
+                                        <span class="shift-badge shift-night">
+                                            <i class="fas fa-moon"></i> ليلي
+                                        </span>
+                                    {% else %}
+                                        <span class="shift-badge">{{ schedule.shift }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="date-badge">
+                                        <i class="fas fa-calendar-day"></i> {{ schedule.week_start_date }}
+                                    </span>
+                                    <i class="fas fa-arrow-left mx-1"></i>
+                                    <span class="date-badge">
+                                        <i class="fas fa-calendar-day"></i> {{ schedule.week_end_date }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="employee-list">
+                                        {% for employee in schedule.employees.all %}
+                                            <span class="employee-badge">
+                                                <i class="fas fa-user"></i> {{ employee.name }}
+                                            </span>
+                                        {% empty %}
+                                            <span class="text-muted">لا يوجد موظفين</span>
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'weekly_schedule_update' schedule.pk %}" class="btn btn-warning btn-sm">
+                                            <i class="fas fa-edit"></i> تعديل
+                                        </a>
+                                        <a href="{% url 'weekly_schedule_delete' schedule.pk %}" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash"></i> حذف
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-calendar-week fa-4x mb-3" style="opacity: 0.3; color: #6B7280;"></i>
+                    <p class="text-muted">لا يوجد جدولة أسبوعية مسجلة</p>
+                    <a href="{% url 'weekly_schedule_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> إضافة أول جدولة
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-4">
+            <i class="fas fa-info-circle"></i>
+            <strong>ملاحظة:</strong> الجدولة الأسبوعية تحدد أي موظفين سيعملون في أي شفت خلال الأسبوع.
+            سيستخدم النظام هذه البيانات لتوزيع الموظفين تلقائياً على السونارات كل 3 ساعات.
+        </div>
+    </div>
+</div>
+{% endblock %}
+

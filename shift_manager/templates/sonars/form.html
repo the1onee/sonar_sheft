@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - نظام إدارة الورديات{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-satellite-dish"></i> {{ title }}
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+                            
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ form.non_field_errors }}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">
+                                    <i class="fas fa-satellite-dish"></i> {{ form.name.label }}
+                                </label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                <div class="text-danger mt-1">
+                                    {% for error in form.name.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form.max_employees.id_for_label }}" class="form-label">
+                                    <i class="fas fa-users"></i> {{ form.max_employees.label }}
+                                </label>
+                                {{ form.max_employees }}
+                                <small class="form-text text-muted">
+                                    عدد الموظفين الأقصى الذي يمكن تعيينهم لهذا السونار في نفس الوقت
+                                </small>
+                                {% if form.max_employees.errors %}
+                                <div class="text-danger mt-1">
+                                    {% for error in form.max_employees.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div class="form-check">
+                                    {{ form.active }}
+                                    <label class="form-check-label" for="{{ form.active.id_for_label }}">
+                                        <i class="fas fa-check-circle"></i> {{ form.active.label }}
+                                    </label>
+                                </div>
+                                <small class="form-text text-muted">
+                                    إذا كان السونار غير نشط، لن يتم تضمينه في التوزيع التلقائي
+                                </small>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> حفظ
+                                </button>
+                                <a href="{% url 'sonar_list' %}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> إلغاء
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

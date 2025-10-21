@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - نظام إدارة الورديات{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i class="fas fa-user-plus"></i> {{ title }}
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" novalidate>
+                            {% csrf_token %}
+                            
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                {{ form.non_field_errors }}
+                            </div>
+                            {% endif %}
+
+                            <!-- معلومات الموظف الأساسية -->
+                            <div class="card mb-3">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-user"></i> معلومات الموظف</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                                            <i class="fas fa-user"></i> {{ form.name.label }} <span class="text-danger">*</span>
+                                        </label>
+                                        {{ form.name }}
+                                        {% if form.name.errors %}
+                                        <div class="text-danger mt-1">
+                                            {% for error in form.name.errors %}
+                                                <small>{{ error }}</small>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="{{ form.telegram_id.id_for_label }}" class="form-label">
+                                            <i class="fab fa-telegram"></i> {{ form.telegram_id.label }}
+                                        </label>
+                                        {{ form.telegram_id }}
+                                        <small class="form-text text-muted">
+                                            معرف التليجرام الرقمي (اختياري - مثال: 1260880606)
+                                        </small>
+                                        {% if form.telegram_id.errors %}
+                                        <div class="text-danger mt-1">
+                                            {% for error in form.telegram_id.errors %}
+                                                <small>{{ error }}</small>
+                                            {% endfor %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="mb-0">
+                                        <div class="form-check">
+                                            {{ form.is_on_leave }}
+                                            <label class="form-check-label" for="{{ form.is_on_leave.id_for_label }}">
+                                                <i class="fas fa-umbrella-beach"></i> {{ form.is_on_leave.label }}
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            إذا كان الموظف في إجازة، لن يتم تعيينه في التوزيع التلقائي
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- إنشاء حساب (للمدير فقط) -->
+                            {% if can_create_account %}
+                            <div class="card mb-3">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="fas fa-key"></i> حساب تسجيل الدخول (اختياري)</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            {{ form.create_account }}
+                                            <label class="form-check-label" for="{{ form.create_account.id_for_label }}">
+                                                <strong>{{ form.create_account.label }}</strong>
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle"></i> 
+                                            إذا تم تفعيل هذا الخيار، سيتمكن الموظف من تسجيل الدخول للنظام
+                                        </small>
+                                    </div>
+
+                                    <div id="account-fields" style="display: none;">
+                                        <hr>
+                                        <div class="mb-3">
+                                            <label for="{{ form.username.id_for_label }}" class="form-label">
+                                                <i class="fas fa-user-circle"></i> {{ form.username.label }} <span class="text-danger">*</span>
+                                            </label>
+                                            {{ form.username }}
+                                            <small class="form-text text-muted">
+                                                اسم فريد للموظف لتسجيل الدخول
+                                            </small>
+                                            {% if form.username.errors %}
+                                            <div class="text-danger mt-1">
+                                                {% for error in form.username.errors %}
+                                                    <small>{{ error }}</small>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6 mb-3">
+                                                <label for="{{ form.password.id_for_label }}" class="form-label">
+                                                    <i class="fas fa-lock"></i> {{ form.password.label }} <span class="text-danger">*</span>
+                                                </label>
+                                                {{ form.password }}
+                                                {% if form.password.errors %}
+                                                <div class="text-danger mt-1">
+                                                    {% for error in form.password.errors %}
+                                                        <small>{{ error }}</small>
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="col-md-6 mb-3">
+                                                <label for="{{ form.password_confirm.id_for_label }}" class="form-label">
+                                                    <i class="fas fa-lock"></i> {{ form.password_confirm.label }} <span class="text-danger">*</span>
+                                                </label>
+                                                {{ form.password_confirm }}
+                                                {% if form.password_confirm.errors %}
+                                                <div class="text-danger mt-1">
+                                                    {% for error in form.password_confirm.errors %}
+                                                        <small>{{ error }}</small>
+                                                    {% endfor %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+
+                                        <div class="alert alert-info mb-0">
+                                            <i class="fas fa-info-circle"></i>
+                                            <strong>ملاحظة:</strong> سيتمكن الموظف من تسجيل الدخول ورؤية تبديلاته وإحصائياته فقط
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- أزرار الحفظ والإلغاء -->
+                            <div class="d-flex gap-2 justify-content-end">
+                                <a href="{% url 'employee_list' %}" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> إلغاء
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save"></i> حفظ
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // إظهار/إخفاء حقول الحساب
+    document.addEventListener('DOMContentLoaded', function() {
+        const createAccountCheckbox = document.getElementById('{{ form.create_account.id_for_label }}');
+        const accountFields = document.getElementById('account-fields');
+        
+        if (createAccountCheckbox) {
+            // عند تحميل الصفحة
+            toggleAccountFields();
+            
+            // عند تغيير الـ checkbox
+            createAccountCheckbox.addEventListener('change', toggleAccountFields);
+            
+            function toggleAccountFields() {
+                if (createAccountCheckbox.checked) {
+                    accountFields.style.display = 'block';
+                } else {
+                    accountFields.style.display = 'none';
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

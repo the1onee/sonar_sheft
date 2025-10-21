@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}قائمة المشرفين{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-users-cog"></i> قائمة المشرفين</h2>
+        <a href="{% url 'supervisor_account_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> إضافة مشرف جديد
+        </a>
+    </div>
+
+    {% if supervisors %}
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الاسم</th>
+                            <th>اسم المستخدم</th>
+                            <th>الشفت المسؤول عنه</th>
+                            <th>رقم الهاتف</th>
+                            <th>الحالة</th>
+                            <th>تاريخ الإنشاء</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supervisor in supervisors %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><i class="fas fa-user-cog"></i> {{ supervisor.name }}</td>
+                            <td>{{ supervisor.user.username }}</td>
+                            <td>
+                                {% if supervisor.assigned_shift %}
+                                    <span class="badge bg-primary">
+                                        <i class="fas fa-clock"></i> {{ supervisor.assigned_shift }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">غير محدد</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ supervisor.phone|default:"—" }}</td>
+                            <td>
+                                {% if supervisor.is_active %}
+                                    <span class="badge bg-success">نشط</span>
+                                {% else %}
+                                    <span class="badge bg-danger">معطل</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ supervisor.created_at|date:"Y-m-d" }}</td>
+                            <td>
+                                <a href="{% url 'supervisor_account_toggle' supervisor.pk %}" 
+                                   class="btn btn-sm {% if supervisor.is_active %}btn-warning{% else %}btn-success{% endif %}"
+                                   onclick="return confirm('هل أنت متأكد؟')">
+                                    <i class="fas fa-power-off"></i>
+                                    {% if supervisor.is_active %}إلغاء التفعيل{% else %}تفعيل{% endif %}
+                                </a>
+                                <a href="{% url 'supervisor_account_delete' supervisor.pk %}" 
+                                   class="btn btn-sm btn-danger">
+                                    <i class="fas fa-trash"></i> حذف
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info text-center">
+        <i class="fas fa-info-circle fa-3x mb-3"></i>
+        <p>لا يوجد مشرفين حالياً</p>
+        <a href="{% url 'supervisor_account_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> إضافة مشرف جديد
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
