@@ -290,17 +290,28 @@ def employee_list(request):
     
     # إضافة معلومات عن الحسابات
     employees_data = []
+    accounts_count = 0
+    leave_count = 0
+    
     for emp in employees:
+        has_account = hasattr(emp, 'user') and emp.user is not None
         employees_data.append({
             'employee': emp,
-            'has_account': hasattr(emp, 'user') and emp.user is not None,
+            'has_account': has_account,
         })
+        
+        if has_account:
+            accounts_count += 1
+        if emp.is_on_leave:
+            leave_count += 1
     
     context = {
         'employees': employees,
         'employees_data': employees_data,
         'user_role': user_role,
         'can_manage_accounts': can_manage_accounts,
+        'accounts_count': accounts_count,
+        'leave_count': leave_count,
     }
     return render(request, 'employees/list.html', context)
 
@@ -358,15 +369,49 @@ def employee_create(request):
 def employee_update(request, pk):
     """تعديل موظف"""
     employee = get_object_or_404(Employee, pk=pk)
+    user_role = get_user_role(request.user)
+    can_create_account = user_role in ['manager', 'superadmin']
+    
     if request.method == 'POST':
         form = EmployeeForm(request.POST, instance=employee)
         if form.is_valid():
-            form.save()
-            messages.success(request, f'✅ تم تحديث بيانات {employee.name} بنجاح!')
+            # حفظ بيانات الموظف
+            updated_employee = form.save(commit=False)
+            
+            # إذا تم اختيار إنشاء حساب ولم يكن لديه حساب مسبقاً
+            create_account = form.cleaned_data.get('create_account')
+            if create_account and can_create_account and not employee.user:
+                # إنشاء User جديد
+                username = form.cleaned_data.get('username')
+                password = form.cleaned_data.get('password')
+                
+                user = User.objects.create_user(
+                    username=username,
+                    password=password,
+                    first_name=updated_employee.name
+                )
+                
+                updated_employee.user = user
+                messages.success(
+                    request, 
+                    f'✅ تم تحديث بيانات {employee.name} وإنشاء حساب ({username}) بنجاح!'
+                )
+            else:
+                messages.success(request, f'✅ تم تحديث بيانات {employee.name} بنجاح!')
+            
+            updated_employee.save()
             return redirect('employee_list')
     else:
         form = EmployeeForm(instance=employee)
-    return render(request, 'employees/form.html', {'form': form, 'title': f'تعديل: {employee.name}'})
+    
+    context = {
+        'form': form, 
+        'title': f'تعديل: {employee.name}',
+        'user_role': user_role,
+        'can_create_account': can_create_account,
+        'employee': employee
+    }
+    return render(request, 'employees/form.html', context)
 
 @staff_required
 def employee_delete(request, pk):

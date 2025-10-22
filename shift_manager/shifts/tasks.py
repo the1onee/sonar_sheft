@@ -17,29 +17,20 @@ def rotate_shifts_task(rotation_hours=None):
         print("🔕 التبديل التلقائي معطل من الإعدادات")
         return
     
-    # التحقق من الوقت المناسب للتبديل
-    from datetime import timedelta
-    now = timezone.now()
-    
-    # إذا كان هناك آخر تبديل، نتحقق من الوقت المنقضي
-    if settings.last_rotation_time:
-        time_since_last = now - settings.last_rotation_time
-        required_interval = timedelta(hours=settings.get_effective_rotation_hours())
-        
-        if time_since_last < required_interval:
-            remaining_time = required_interval - time_since_last
-            minutes_remaining = remaining_time.total_seconds() / 60
-            print(f"⏳ لم يحن وقت التبديل بعد. متبقي: {minutes_remaining:.1f} دقيقة")
-            return
-    
-    # استخدام الإعدادات المحفوظة
-    rotation_hours = settings.get_effective_rotation_hours()
-    print(f"📊 تنفيذ التبديل حسب الإعدادات: {rotation_hours} ساعة")
-    
     # الحصول على الوقت الحالي بالمنطقة الزمنية المحلية (Asia/Baghdad)
-    now_local = timezone.localtime(timezone.now()).time()
-
-    # تعريف نطاقات الشفتات حسب الساعة (استخدام القيم الإنجليزية كما في قاعدة البيانات)
+    from datetime import timedelta, datetime
+    now = timezone.now()
+    now_local = timezone.localtime(now)
+    current_time = now_local.time()
+    
+    # تعريف أوقات نهاية الشفتات
+    shift_end_times = {
+        "night": time(7, 0),      # نهاية الليلي - بداية الصباحي
+        "morning": time(15, 0),   # نهاية الصباحي - بداية المسائي  
+        "evening": time(23, 0),   # نهاية المسائي - بداية الليلي
+    }
+    
+    # تعريف نطاقات الشفتات حسب الساعة
     shift_ranges = {
         "morning": (time(7, 0), time(15, 0)),    # صباحي
         "evening": (time(15, 0), time(23, 0)),   # مسائي
@@ -52,34 +43,97 @@ def rotate_shifts_task(rotation_hours=None):
         "evening": "مسائي",
         "night": "ليلي"
     }
-
-    # تحديد الشفت الحالي حسب الوقت
+    
+    # تحديد الشفت الحالي
     current_shift_name = None
     for shift_name, (start, end) in shift_ranges.items():
-        if start <= end:  # شفت عادي (صباحي، مسائي)
-            if start <= now_local < end:
+        if start <= end:  # شفت عادي
+            if start <= current_time < end:
                 current_shift_name = shift_name
                 break
-        else:  # شفت يمر منتصف الليل (ليلي من 23:00 إلى 07:00)
-            if now_local >= start or now_local < end:
+        else:  # شفت يمر منتصف الليل
+            if current_time >= start or current_time < end:
                 current_shift_name = shift_name
                 break
-
+    
     if not current_shift_name:
         print("❌ لا يوجد شفت نشط حاليا")
         return
-
-    # طباعة اسم الشفت بالعربية
-    print(f"🔄 الشفت الحالي: {shift_labels.get(current_shift_name, current_shift_name)} ({now_local.strftime('%H:%M')})")
-
-    # تنفيذ التدوير فقط للشفت الحالي
-    try:
-        rotate_within_shift(current_shift_name, rotation_hours)
-        # تحديث وقت آخر تبديل
-        settings.update_last_rotation_time()
-        print(f"✅ تم التبديل بنجاح وتحديث آخر وقت تبديل")
-    except Exception as e:
-        print(f"❌ خطأ في شفت {shift_labels.get(current_shift_name, current_shift_name)}: {e}")
+    
+    # الحصول على ساعات التبديل من الإعدادات
+    rotation_hours = settings.get_effective_rotation_hours()
+    
+    # 🔥 الأولوية الأولى: التحقق إذا كنا في نهاية الشيفت
+    is_shift_end = False
+    shift_to_rotate = None
+    
+    for shift_name, end_time in shift_end_times.items():
+        # حساب الفرق بالدقائق من وقت نهاية الشيفت
+        current_datetime = datetime.combine(now_local.date(), current_time)
+        end_datetime = datetime.combine(now_local.date(), end_time)
+        
+        # معالجة حالة منتصف الليل
+        if end_time.hour < 12 and current_time.hour >= 12:
+            end_datetime += timedelta(days=1)
+        
+        time_diff = (end_datetime - current_datetime).total_seconds() / 60
+        
+        # إذا كنا في آخر 15 دقيقة من الشيفت أو مرت 5 دقائق من بدايته
+        if -5 <= time_diff <= 15:
+            is_shift_end = True
+            shift_to_rotate = shift_name
+            print(f"⏰ نهاية الشيفت! {shift_labels.get(shift_name)} | الوقت المتبقي: {time_diff:.1f} دقيقة | تبديل مباشر")
+            
+            # التحقق من عدم التبديل مرتين في نفس الفترة (كل 15 دقيقة على الأقل)
+            if settings.last_rotation_time:
+                time_since_last = now - settings.last_rotation_time
+                if time_since_last < timedelta(minutes=15):
+                    minutes_since = time_since_last.total_seconds() / 60
+                    print(f"⏸️ تم التبديل مؤخراً ({minutes_since:.1f} دقيقة مضت). تجاهل...")
+                    return
+            
+            # تنفيذ التبديل فوراً عند نهاية الشيفت
+            try:
+                rotate_within_shift(current_shift_name, rotation_hours)
+                settings.update_last_rotation_time()
+                print(f"✅ تبديل نهاية الشيفت: {shift_labels.get(shift_name)} → الشيفت التالي")
+                return
+            except Exception as e:
+                print(f"❌ خطأ في تبديل نهاية الشيفت: {e}")
+                return
+    
+    # 🔥 الأولوية الثانية: التحقق من الوقت المحدد (X ساعات)
+    if settings.last_rotation_time:
+        time_since_last = now - settings.last_rotation_time
+        required_interval = timedelta(hours=rotation_hours)
+        
+        if time_since_last >= required_interval:
+            # حان وقت التبديل حسب الإعدادات
+            hours_since = time_since_last.total_seconds() / 3600
+            print(f"⏱️ مر {hours_since:.1f} ساعة من آخر تبديل (المطلوب: {rotation_hours} ساعة)")
+            
+            try:
+                rotate_within_shift(current_shift_name, rotation_hours)
+                settings.update_last_rotation_time()
+                print(f"✅ تبديل دوري: كل {rotation_hours} ساعة في شفت {shift_labels.get(current_shift_name)}")
+                return
+            except Exception as e:
+                print(f"❌ خطأ في التبديل الدوري: {e}")
+                return
+        else:
+            # لم يحن وقت التبديل بعد
+            remaining_time = required_interval - time_since_last
+            minutes_remaining = remaining_time.total_seconds() / 60
+            print(f"⏳ لم يحن وقت التبديل بعد | متبقي: {minutes_remaining:.1f} دقيقة | شفت: {shift_labels.get(current_shift_name)}")
+    else:
+        # أول مرة يتم تشغيل النظام - نبدأ التبديل الآن
+        print(f"🆕 أول تبديل في النظام - بدء التبديل في شفت {shift_labels.get(current_shift_name)}")
+        try:
+            rotate_within_shift(current_shift_name, rotation_hours)
+            settings.update_last_rotation_time()
+            print(f"✅ تم التبديل الأولي بنجاح")
+        except Exception as e:
+            print(f"❌ خطأ في التبديل الأولي: {e}")
 
 
 @shared_task
