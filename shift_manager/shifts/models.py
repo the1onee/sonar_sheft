@@ -282,11 +282,12 @@ class EarlyNotification(models.Model):
         verbose_name='نوع الإشعار'
     )
     notification_stage = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=[
             ('initial', 'إشعار أولي (30 دقيقة)'),
             ('reminder', 'تذكير (كل 10 دقائق)'),
-            ('final', 'إشعار نهائي (وقت التبديل)')
+            ('final', 'إشعار نهائي (وقت التبديل)'),
+            ('unconfirmed_warning', 'تحذير: لم يؤكد الموظف')
         ],
         default='initial',
         verbose_name='مرحلة الإشعار'

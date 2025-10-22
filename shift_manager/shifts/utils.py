@@ -368,64 +368,47 @@ def rotate_within_shift(shift_name, rotation_hours=None):
 
 
 def cancel_expired_confirmations():
-    """رفض التبديلات التي انتهى وقتها ولم يؤكدها الموظف"""
+    """إشعار المشرف بالتبديلات التي لم يؤكدها الموظف (بدون رفض تلقائي)"""
     from datetime import timedelta
-    from .models import AssignmentConfirmation
     
     now = timezone.localtime(timezone.now())
     settings = SystemSettings.get_current_settings()
     rotation_hours = settings.get_effective_rotation_hours()
     
     # البحث عن التبديلات التي:
-    # 1. انتهى وقتها بفترة كافية (مر على وقتها rotation_hours كاملة)
+    # 1. مر عليها وقت كافٍ (rotation_hours)
     # 2. الموظف لم يؤكد (employee_confirmed = False)
-    # 3. لم يتم رفضها أو تأكيدها من قبل
+    # 3. لم يتم تأكيدها نهائياً
     cutoff_time = now - timedelta(hours=rotation_hours)
     
-    expired_assignments = EmployeeAssignment.objects.filter(
+    unconfirmed_assignments = EmployeeAssignment.objects.filter(
         assigned_at__lt=cutoff_time,  # مر عليها أكثر من فترة التبديل
         employee_confirmed=False,  # الموظف لم يؤكد
         confirmed=False  # لم يتم تأكيدها نهائياً
-    ).exclude(
-        confirmation__isnull=False  # لم يتم رفضها من قبل
     ).select_related('employee', 'sonar', 'shift')
     
-    rejected_count = 0
+    notified_count = 0
     
-    for assignment in expired_assignments:
+    for assignment in unconfirmed_assignments:
         # حساب كم ساعة/دقيقة مرت منذ وقت التبديل
         time_passed = now - assignment.assigned_at
         hours_passed = time_passed.total_seconds() / 3600
         
-        print(f"❌ رفض تبديل منتهي: {assignment.employee.name} → {assignment.sonar.name} (مر عليه {hours_passed:.1f} ساعة)")
-        
-        # إنشاء سجل رفض تلقائي
-        AssignmentConfirmation.objects.create(
+        # التحقق من عدم إرسال نفس الإشعار مسبقاً (تجنب التكرار)
+        # نستخدم EarlyNotification لتتبع الإشعارات المرسلة
+        notification_exists = EarlyNotification.objects.filter(
             assignment=assignment,
-            status='rejected',
-            confirmed_by=None,  # رفض تلقائي
-            notes=f'تم الرفض تلقائياً - لم يؤكد الموظف خلال {rotation_hours} ساعة'
-        )
+            notification_type='admin',
+            notification_stage='unconfirmed_warning'  # مرحلة جديدة للتحذير
+        ).exists()
         
-        # إرسال إشعار للموظف
-        if assignment.employee.telegram_id:
-            employee_message = f"""
-❌ تم رفض التبديل تلقائياً
-
-مرحباً {assignment.employee.name},
-
-تم رفض التبديل التالي تلقائياً لأنك لم تؤكده في الوقت المحدد:
-📡 السونار: {assignment.sonar.name}
-🕐 الشفت: {assignment.shift.get_name_display()}
-⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
-⏳ مر عليه: {int(hours_passed)} ساعة
-
-⚠️ يجب التأكيد خلال {rotation_hours} ساعة من موعد التبديل.
-يرجى التواصل مع المشرف للتوضيح.
-            """
-            send_telegram_message(assignment.employee.telegram_id, employee_message)
+        if notification_exists:
+            # تم إرسال الإشعار مسبقاً، تخطي
+            continue
         
-        # إرسال إشعار للمشرفين
+        print(f"⚠️ تبديل غير مؤكد: {assignment.employee.name} → {assignment.sonar.name} (مر عليه {hours_passed:.1f} ساعة)")
+        
+        # إرسال إشعار للمشرفين فقط (بدون رفض تلقائي)
         supervisors = User.objects.filter(
             models.Q(is_superuser=True) | models.Q(supervisor_profile__is_active=True)
         ).distinct()
@@ -433,24 +416,36 @@ def cancel_expired_confirmations():
         for supervisor in supervisors:
             if hasattr(supervisor, 'supervisor_profile') and supervisor.supervisor_profile.phone:
                 supervisor_message = f"""
-⚠️ تحذير: تبديل مرفوض تلقائياً
+⚠️ تحذير: موظف لم يؤكد التبديل
 
 👤 الموظف: {assignment.employee.name}
 📡 السونار: {assignment.sonar.name}
 🕐 الشفت: {assignment.shift.get_name_display()}
 ⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
 ⏳ مر عليه: {int(hours_passed)} ساعة
-❌ السبب: لم يؤكد خلال {rotation_hours} ساعة
+❓ الحالة: لم يؤكد الموظف
 
-يرجى المتابعة مع الموظف واتخاذ الإجراء المناسب.
+📋 يرجى المتابعة مع الموظف واتخاذ القرار المناسب:
+- تأكيد التبديل يدوياً
+- أو رفض التبديل يدوياً
+
+⚠️ لن يتم الرفض تلقائياً - القرار بيدك.
                 """
                 send_telegram_message(supervisor.supervisor_profile.phone, supervisor_message)
         
-        rejected_count += 1
+        # حفظ سجل الإشعار لتجنب التكرار
+        EarlyNotification.objects.create(
+            assignment=assignment,
+            notification_type='admin',
+            notification_stage='unconfirmed_warning',
+            minutes_before=0  # إشعار بعد انتهاء المدة
+        )
+        
+        notified_count += 1
     
-    if rejected_count > 0:
-        print(f"✅ تم رفض {rejected_count} تبديل منتهي تلقائياً")
+    if notified_count > 0:
+        print(f"📢 تم إرسال {notified_count} إشعار للمشرفين عن تبديلات غير مؤكدة")
     else:
-        print("✓ لا توجد تبديلات منتهية للرفض")
+        print("✓ جميع التبديلات إما مؤكدة أو تم الإشعار عنها مسبقاً")
     
-    return rejected_count
+    return notified_count
