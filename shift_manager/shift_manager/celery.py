@@ -37,11 +37,6 @@ app.conf.beat_schedule = {
         'task': 'shifts.tasks.check_early_notifications_task',
         'schedule': crontab(minute='*/2'),
     },
-    # مهمة رفض التبديلات المنتهية (التي لم يؤكدها الموظف) - كل 10 دقائق
-    'cancel-expired-confirmations': {
-        'task': 'shifts.tasks.cancel_expired_confirmations_task',
-        'schedule': crontab(minute='*/10'),
-    },
 }
 
 app.autodiscover_tasks()

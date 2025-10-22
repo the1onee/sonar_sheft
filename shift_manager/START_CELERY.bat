@@ -1,20 +1,36 @@
 @echo off
 echo ========================================
-echo تشغيل Celery Worker و Beat
+echo 🚀 تشغيل Celery Worker و Beat
 echo ========================================
 echo.
 
-echo انسخ .env.local الى .env اولا:
-copy .env.local .env
+REM التحقق من وجود ملف celery_config.env
+if exist celery_config.env (
+    echo ✅ تم العثور على celery_config.env
+) else (
+    echo ❌ لم يتم العثور على celery_config.env
+    echo يرجى إنشاء الملف أولاً
+    pause
+    exit /b 1
+)
 
 echo.
-echo الان شغل في 2 terminals:
+echo 🔄 بدء تشغيل Celery Worker...
+start "Celery Worker" cmd /k "celery -A shift_manager worker --loglevel=info --pool=solo"
+
+timeout /t 2 /nobreak >nul
+
+echo 🔄 بدء تشغيل Celery Beat...
+start "Celery Beat" cmd /k "celery -A shift_manager beat --loglevel=info"
+
 echo.
-echo Terminal 1:
-echo   celery -A shift_manager worker --loglevel=info --pool=solo
+echo ✅ تم تشغيل Celery بنجاح!
 echo.
-echo Terminal 2:
-echo   celery -A shift_manager beat --loglevel=info
+echo 📋 المهام المجدولة:
+echo   - rotate-shifts-default: كل 3 ساعات (التبديل التلقائي)
+echo   - check-early-notifications: كل دقيقتين (الإشعارات المبكرة)
+echo.
+echo ℹ️ ملاحظة: الرفض التلقائي يعمل عند بداية كل تبديل جديد
 echo.
 pause
 

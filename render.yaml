@@ -9,9 +9,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
-        value: "True"
+        value: "False"
       - key: ALLOWED_HOSTS
-        value: "shift-sonar.onrender.com,127.0.0.1,localhost"
+        value: "*"
       - key: DB_NAME
         sync: false
       - key: DB_USER

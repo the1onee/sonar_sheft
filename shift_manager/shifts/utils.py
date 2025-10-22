@@ -216,6 +216,12 @@ def rotate_within_shift(shift_name, rotation_hours=None):
     else:
         print(f"📊 استخدام فترة التبديل المحددة: {rotation_hours} ساعة")
     
+    # ❌ رفض التبديلات السابقة غير المؤكدة قبل البدء بالتبديل الجديد
+    print("\n🔍 فحص التبديلات السابقة غير المؤكدة...")
+    rejected_count = cancel_expired_confirmations()
+    if rejected_count > 0:
+        print(f"❌ تم رفض {rejected_count} تبديل غير مؤكد من الفترة السابقة\n")
+    
     # استخدام الوقت المحلي (Asia/Baghdad) بدلاً من UTC
     now = timezone.localtime(timezone.now())
 
@@ -349,6 +355,10 @@ def rotate_within_shift(shift_name, rotation_hours=None):
     # ✅ تأكيد اكتمال العملية بنجاح
     print(f"✅ تم توزيع {len(assigned_employees)} موظف للشفت {shift.name} بنجاح")
     print(f"⏰ الفترة: {current_rotation_start.strftime('%H:%M')} - {current_rotation_end.strftime('%H:%M')}")
+    
+    # 🕐 تحديث وقت آخر تبديل في الإعدادات
+    settings.update_last_rotation_time()
+    print(f"🕐 تم تحديث آخر وقت تبديل: {timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M')}")
     
     # 📊 عرض ملخص التوزيع
     print("\n📊 ملخص التوزيع:")

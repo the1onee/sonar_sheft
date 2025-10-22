@@ -205,6 +205,14 @@ class SystemSettings(models.Model):
         verbose_name='تفعيل التبديل التلقائي'
     )
     
+    # تتبع آخر تبديل
+    last_rotation_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='آخر وقت تبديل',
+        help_text='آخر وقت تم فيه تنفيذ التبديل التلقائي'
+    )
+    
     # تواريخ الإنشاء والتحديث
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ آخر تحديث')
@@ -227,11 +235,23 @@ class SystemSettings(models.Model):
         return self.rotation_interval_hours
     
     def get_next_rotation_time(self):
-        """حساب وقت التبديل التالي"""
+        """حساب وقت التبديل التالي بناءً على آخر تبديل"""
         from datetime import timedelta
-        now = timezone.localtime(timezone.now())
-        next_time = now + timedelta(hours=self.get_effective_rotation_hours())
+        
+        # إذا كان هناك آخر تبديل، نحسب بناءً عليه
+        if self.last_rotation_time:
+            next_time = self.last_rotation_time + timedelta(hours=self.get_effective_rotation_hours())
+        else:
+            # إذا لم يتم التبديل بعد، نحسب من الوقت الحالي
+            now = timezone.localtime(timezone.now())
+            next_time = now + timedelta(hours=self.get_effective_rotation_hours())
+        
         return next_time
+    
+    def update_last_rotation_time(self):
+        """تحديث وقت آخر تبديل إلى الوقت الحالي"""
+        self.last_rotation_time = timezone.now()
+        self.save(update_fields=['last_rotation_time'])
     
     @classmethod
     def get_current_settings(cls):
