@@ -63,10 +63,10 @@ ROOT_URLCONF = 'shift_manager.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-'DIRS': [
+        'DIRS': [
             os.path.join(BASE_DIR, 'templates'),
         ],
-        'APP_DIRS': True,   # ← تأكد أنها True
+        'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -133,22 +133,21 @@ USE_I18N = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-# مكان ملفات الستاتيك عند التطوير
+
 STATIC_URL = '/static/'
 
-# اختياري: مسار لحفظ ملفات static عند collectstatic
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+# مكان تجميع جميع الملفات الثابتة عند النشر
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# مسارات إضافية إذا أحببت
+# مسارات إضافية للملفات الثابتة (اختياري)
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',  # مجلد static في المشروع الرئيسي
+    os.path.join(BASE_DIR, 'static'),
 ]
 
+# WhiteNoise - لخدمة الملفات الثابتة في Production
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# WhiteNoise
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
