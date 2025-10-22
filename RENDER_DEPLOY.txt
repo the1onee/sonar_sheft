@@ -1,0 +1,31 @@
+════════════════════════════════════════════════════════
+خطوات الرفع على Render
+════════════════════════════════════════════════════════
+
+1. Push على GitHub:
+   git add .
+   git commit -m "Ready for Render"
+   git push
+
+2. في Render Dashboard:
+   - New → Blueprint
+   - اختر Repository
+   - سيتم إنشاء 3 Services تلقائياً:
+     • shift-manager-web (Django)
+     • shift-manager-celery-worker
+     • shift-manager-celery-beat
+
+3. أضف Environment Variables في كل Service:
+
+   ALLOWED_HOSTS = your-app.onrender.com
+   DB_NAME = shift_sonar
+   DB_USER = shift_sonar_user
+   DB_PASSWORD = xsoIgFjk6Wy7YD22C6zFszG40dOaaSEo
+   DB_HOST = dpg-d3rkjsc9c44c73aphff0-a.oregon-postgres.render.com
+   REDIS_URL = rediss://default:ASm7AAIncDJk...
+   TELEGRAM_BOT_TOKEN = 7308309352:AAEXhAYReJDDETe3Mkb4...
+
+4. Deploy!
+
+════════════════════════════════════════════════════════
+

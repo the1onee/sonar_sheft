@@ -11,7 +11,7 @@ services:
       - key: DEBUG
         value: "False"
       - key: ALLOWED_HOSTS
-        sync: false
+        value: "shift-sonar.onrender.com"
       - key: DB_NAME
         sync: false
       - key: DB_USER
