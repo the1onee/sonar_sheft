@@ -1,14 +1,24 @@
 import random
 import requests
+import os
 from datetime import time, timedelta
+from dotenv import load_dotenv
 
 from django.utils import timezone
 from django.db import models
 from .models import Shift, Sonar, Employee, EmployeeAssignment, WeeklyShiftAssignment, SystemSettings, EarlyNotification
 from django.contrib.auth.models import User
 
+# تحميل ملف .env
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
 # 🔑 رمز البوت الخاص بتطبيق تليغرام (Telegram Bot Token)
-BOT_TOKEN = "7308309352:AAEXhAYReJDDETe3Mkb4B8eCfAdY-k-im2k"
+BOT_TOKEN = os.getenv(
+    'TELEGRAM_BOT_TOKEN',
+    '7308309352:AAEXhAYReJDDETe3Mkb4B8eCfAdY-k-im2k'
+)
 
 
 # 📨 دالة لإرسال رسالة إلى موظف عبر تليغرام
@@ -345,3 +355,92 @@ def rotate_within_shift(shift_name, rotation_hours=None):
     for sonar in active_sonars:
         count = sonar_assignment_count[sonar.id]
         print(f"  {sonar.name}: {count}/{sonar.max_employees} موظف")
+
+
+def cancel_expired_confirmations():
+    """رفض التبديلات التي انتهى وقتها ولم يؤكدها الموظف"""
+    from datetime import timedelta
+    from .models import AssignmentConfirmation
+    
+    now = timezone.localtime(timezone.now())
+    settings = SystemSettings.get_current_settings()
+    rotation_hours = settings.get_effective_rotation_hours()
+    
+    # البحث عن التبديلات التي:
+    # 1. انتهى وقتها بفترة كافية (مر على وقتها rotation_hours كاملة)
+    # 2. الموظف لم يؤكد (employee_confirmed = False)
+    # 3. لم يتم رفضها أو تأكيدها من قبل
+    cutoff_time = now - timedelta(hours=rotation_hours)
+    
+    expired_assignments = EmployeeAssignment.objects.filter(
+        assigned_at__lt=cutoff_time,  # مر عليها أكثر من فترة التبديل
+        employee_confirmed=False,  # الموظف لم يؤكد
+        confirmed=False  # لم يتم تأكيدها نهائياً
+    ).exclude(
+        confirmation__isnull=False  # لم يتم رفضها من قبل
+    ).select_related('employee', 'sonar', 'shift')
+    
+    rejected_count = 0
+    
+    for assignment in expired_assignments:
+        # حساب كم ساعة/دقيقة مرت منذ وقت التبديل
+        time_passed = now - assignment.assigned_at
+        hours_passed = time_passed.total_seconds() / 3600
+        
+        print(f"❌ رفض تبديل منتهي: {assignment.employee.name} → {assignment.sonar.name} (مر عليه {hours_passed:.1f} ساعة)")
+        
+        # إنشاء سجل رفض تلقائي
+        AssignmentConfirmation.objects.create(
+            assignment=assignment,
+            status='rejected',
+            confirmed_by=None,  # رفض تلقائي
+            notes=f'تم الرفض تلقائياً - لم يؤكد الموظف خلال {rotation_hours} ساعة'
+        )
+        
+        # إرسال إشعار للموظف
+        if assignment.employee.telegram_id:
+            employee_message = f"""
+❌ تم رفض التبديل تلقائياً
+
+مرحباً {assignment.employee.name},
+
+تم رفض التبديل التالي تلقائياً لأنك لم تؤكده في الوقت المحدد:
+📡 السونار: {assignment.sonar.name}
+🕐 الشفت: {assignment.shift.get_name_display()}
+⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
+⏳ مر عليه: {int(hours_passed)} ساعة
+
+⚠️ يجب التأكيد خلال {rotation_hours} ساعة من موعد التبديل.
+يرجى التواصل مع المشرف للتوضيح.
+            """
+            send_telegram_message(assignment.employee.telegram_id, employee_message)
+        
+        # إرسال إشعار للمشرفين
+        supervisors = User.objects.filter(
+            models.Q(is_superuser=True) | models.Q(supervisor_profile__is_active=True)
+        ).distinct()
+        
+        for supervisor in supervisors:
+            if hasattr(supervisor, 'supervisor_profile') and supervisor.supervisor_profile.phone:
+                supervisor_message = f"""
+⚠️ تحذير: تبديل مرفوض تلقائياً
+
+👤 الموظف: {assignment.employee.name}
+📡 السونار: {assignment.sonar.name}
+🕐 الشفت: {assignment.shift.get_name_display()}
+⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
+⏳ مر عليه: {int(hours_passed)} ساعة
+❌ السبب: لم يؤكد خلال {rotation_hours} ساعة
+
+يرجى المتابعة مع الموظف واتخاذ الإجراء المناسب.
+                """
+                send_telegram_message(supervisor.supervisor_profile.phone, supervisor_message)
+        
+        rejected_count += 1
+    
+    if rejected_count > 0:
+        print(f"✅ تم رفض {rejected_count} تبديل منتهي تلقائياً")
+    else:
+        print("✓ لا توجد تبديلات منتهية للرفض")
+    
+    return rejected_count

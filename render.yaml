@@ -1,92 +1,71 @@
 services:
-  # Django Web Service
   - type: web
     name: shift-manager-web
-    runtime: python
-    buildCommand: "cd shift_manager && bash build.sh"
-    startCommand: "cd shift_manager && gunicorn shift_manager.wsgi:application"
+    env: python
+    region: oregon
+    buildCommand: "chmod +x shift_manager/build.sh && ./shift_manager/build.sh"
+    startCommand: "cd shift_manager && gunicorn shift_manager.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
-        value: False
-      - key: DATABASE_URL
-        fromDatabase:
-          name: shift-manager-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: shift-manager-redis
-          property: connectionString
-      - key: TIMEZONE
-        value: Asia/Baghdad
+        value: "False"
       - key: ALLOWED_HOSTS
         sync: false
-    autoDeploy: true
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: REDIS_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
 
-  # Celery Worker
   - type: worker
     name: shift-manager-celery-worker
-    runtime: python
-    buildCommand: "cd shift_manager && pip install -r requirements.txt"
+    env: python
+    region: oregon
+    buildCommand: "pip install -r shift_manager/requirements.txt"
     startCommand: "cd shift_manager && celery -A shift_manager worker --loglevel=info"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: SECRET_KEY
+      - key: DB_NAME
         sync: false
-      - key: DEBUG
-        value: False
-      - key: DATABASE_URL
-        fromDatabase:
-          name: shift-manager-db
-          property: connectionString
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: shift-manager-redis
-          property: connectionString
-      - key: TIMEZONE
-        value: Asia/Baghdad
-    autoDeploy: true
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
 
-  # Celery Beat (Scheduler)
   - type: worker
     name: shift-manager-celery-beat
-    runtime: python
-    buildCommand: "cd shift_manager && pip install -r requirements.txt"
+    env: python
+    region: oregon
+    buildCommand: "pip install -r shift_manager/requirements.txt"
     startCommand: "cd shift_manager && celery -A shift_manager beat --loglevel=info"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: SECRET_KEY
+      - key: DB_NAME
         sync: false
-      - key: DEBUG
-        value: False
-      - key: DATABASE_URL
-        fromDatabase:
-          name: shift-manager-db
-          property: connectionString
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: shift-manager-redis
-          property: connectionString
-      - key: TIMEZONE
-        value: Asia/Baghdad
-    autoDeploy: true
-
-databases:
-  # PostgreSQL Database
-  - name: shift-manager-db
-    plan: starter
-    databaseName: shift_manager_db
-    user: shift_manager_user
-
-  # Redis for Celery
-  - name: shift-manager-redis
-    plan: starter
+        sync: false
 

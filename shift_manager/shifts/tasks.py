@@ -3,7 +3,7 @@ from celery import shared_task
 from datetime import time
 from django.utils import timezone
 from .models import Shift, Sonar, Employee, EmployeeAssignment
-from .utils import rotate_within_shift, check_and_send_early_notifications
+from .utils import rotate_within_shift, check_and_send_early_notifications, cancel_expired_confirmations
 from .models import SystemSettings
 
 
@@ -74,3 +74,12 @@ def check_early_notifications_task():
         check_and_send_early_notifications()
     except Exception as e:
         print(f"❌ خطأ في فحص الإشعارات المبكرة: {e}")
+
+
+@shared_task
+def cancel_expired_confirmations_task():
+    """مهمة دورية لرفض التبديلات المنتهية التي لم يؤكدها الموظف"""
+    try:
+        cancel_expired_confirmations()
+    except Exception as e:
+        print(f"❌ خطأ في رفض التبديلات المنتهية: {e}")

@@ -1,5 +1,5 @@
 from django.apps import AppConfig
-from django.db.utils import OperationalError
+from django.db.utils import OperationalError, ProgrammingError
 
 class ShiftsConfig(AppConfig):
     name = 'shifts'
@@ -12,7 +12,7 @@ class ShiftsConfig(AppConfig):
                 Shift.objects.create(name='evening', start_hour=15, end_hour=23)
                 Shift.objects.create(name='night', start_hour=23, end_hour=7)
                 print("✅ تم إنشاء الشفتات الثلاثة تلقائيًا.")
-        except OperationalError:
+        except (OperationalError, ProgrammingError):
             # قاعدة البيانات قد لا تكون جاهزة أثناء أول ترحيل
             pass
 
