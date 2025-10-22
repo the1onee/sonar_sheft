@@ -27,10 +27,10 @@ app.conf.enable_utc = True
 
 # الجدولة الأساسية لـ Celery Beat
 app.conf.beat_schedule = {
-    # مهمة التبديل التلقائي - كل 3 ساعات (افتراضي)
-    'rotate-shifts-default': {
+    # مهمة التبديل التلقائي - تعمل كل دقيقة وتتحقق من الإعدادات داخلياً
+    'rotate-shifts-dynamic': {
         'task': 'shifts.tasks.rotate_shifts_task',
-        'schedule': timedelta(hours=3),
+        'schedule': crontab(minute='*/1'),  # كل دقيقة للتحقق من الإعدادات
     },
     # مهمة فحص الإشعارات المبكرة - كل دقيقتين
     'check-early-notifications': {
