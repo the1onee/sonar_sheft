@@ -1853,3 +1853,38 @@ def custom_notification_detail(request, pk):
     """تفاصيل إشعار مخصص"""
     notification = get_object_or_404(CustomNotification, pk=pk)
     return render(request, 'notifications/detail.html', {'notification': notification})
+
+
+@staff_required
+def expired_assignments_list(request):
+    """عرض قائمة الطلبات المنتهية غير المؤكدة"""
+    # الطلبات المنتهية (لم يؤكدها الموظف وفات الوقت)
+    expired_assignments = EmployeeAssignment.objects.filter(
+        is_expired_unconfirmed=True,
+        confirmed=False  # لم يتم تأكيدها نهائياً
+    ).select_related('employee', 'sonar', 'shift').order_by('-expired_at')
+    
+    # حساب الإحصائيات
+    total_expired = expired_assignments.count()
+    
+    # حساب الوقت المنقضي لكل طلب
+    now = timezone.now()
+    for assignment in expired_assignments:
+        if assignment.expired_at:
+            time_diff = now - assignment.expired_at
+            hours_diff = int(time_diff.total_seconds() / 3600)
+            days_diff = hours_diff // 24
+            remaining_hours = hours_diff % 24
+            
+            if days_diff > 0:
+                assignment.time_since_expiry = f"{days_diff} يوم و {remaining_hours} ساعة"
+            else:
+                assignment.time_since_expiry = f"{hours_diff} ساعة"
+        else:
+            assignment.time_since_expiry = "غير محدد"
+    
+    context = {
+        'expired_assignments': expired_assignments,
+        'total_expired': total_expired,
+    }
+    return render(request, 'pending_assignments/expired_list.html', context)

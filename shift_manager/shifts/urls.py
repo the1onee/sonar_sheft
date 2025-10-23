@@ -66,6 +66,7 @@ urlpatterns = [
     path('pending-assignments/bulk-confirm/', views.bulk_confirm_assignments, name='bulk_confirm_assignments'),
     path('confirmed-assignments/', views.confirmed_assignments_list, name='confirmed_assignments_list'),
     path('rejected-assignments/', views.rejected_assignments_list, name='rejected_assignments_list'),
+    path('expired-assignments/', views.expired_assignments_list, name='expired_assignments_list'),
     
     # التقارير
     path('reports/', views.reports_view, name='reports'),

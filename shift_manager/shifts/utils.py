@@ -368,7 +368,7 @@ def rotate_within_shift(shift_name, rotation_hours=None):
 
 
 def cancel_expired_confirmations():
-    """إشعار المشرف بالتبديلات التي لم يؤكدها الموظف (بدون رفض تلقائي)"""
+    """وضع علامة على التبديلات المنتهية غير المؤكدة وإشعار المشرف"""
     from datetime import timedelta
     
     now = timezone.localtime(timezone.now())
@@ -379,36 +379,31 @@ def cancel_expired_confirmations():
     # 1. مر عليها وقت كافٍ (rotation_hours)
     # 2. الموظف لم يؤكد (employee_confirmed = False)
     # 3. لم يتم تأكيدها نهائياً
+    # 4. لم يتم وضع علامة عليها كمنتهية مسبقاً
     cutoff_time = now - timedelta(hours=rotation_hours)
     
     unconfirmed_assignments = EmployeeAssignment.objects.filter(
         assigned_at__lt=cutoff_time,  # مر عليها أكثر من فترة التبديل
         employee_confirmed=False,  # الموظف لم يؤكد
-        confirmed=False  # لم يتم تأكيدها نهائياً
+        confirmed=False,  # لم يتم تأكيدها نهائياً
+        is_expired_unconfirmed=False  # لم يتم وضع علامة عليها مسبقاً
     ).select_related('employee', 'sonar', 'shift')
     
-    notified_count = 0
+    marked_count = 0
     
     for assignment in unconfirmed_assignments:
         # حساب كم ساعة/دقيقة مرت منذ وقت التبديل
         time_passed = now - assignment.assigned_at
         hours_passed = time_passed.total_seconds() / 3600
         
-        # التحقق من عدم إرسال نفس الإشعار مسبقاً (تجنب التكرار)
-        # نستخدم EarlyNotification لتتبع الإشعارات المرسلة
-        notification_exists = EarlyNotification.objects.filter(
-            assignment=assignment,
-            notification_type='admin',
-            notification_stage='unconfirmed_warning'  # مرحلة جديدة للتحذير
-        ).exists()
-        
-        if notification_exists:
-            # تم إرسال الإشعار مسبقاً، تخطي
-            continue
-        
         print(f"⚠️ تبديل غير مؤكد: {assignment.employee.name} → {assignment.sonar.name} (مر عليه {hours_passed:.1f} ساعة)")
         
-        # إرسال إشعار للمشرفين فقط (بدون رفض تلقائي)
+        # وضع علامة على التبديل كمنتهي غير مؤكد
+        assignment.is_expired_unconfirmed = True
+        assignment.expired_at = now
+        assignment.save()
+        
+        # إرسال إشعار للمشرفين
         supervisors = User.objects.filter(
             models.Q(is_superuser=True) | models.Q(supervisor_profile__is_active=True)
         ).distinct()
@@ -416,20 +411,19 @@ def cancel_expired_confirmations():
         for supervisor in supervisors:
             if hasattr(supervisor, 'supervisor_profile') and supervisor.supervisor_profile.phone:
                 supervisor_message = f"""
-⚠️ تحذير: موظف لم يؤكد التبديل
+⚠️ طلب منتهي غير مؤكد
 
 👤 الموظف: {assignment.employee.name}
 📡 السونار: {assignment.sonar.name}
 🕐 الشفت: {assignment.shift.get_name_display()}
 ⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
 ⏳ مر عليه: {int(hours_passed)} ساعة
-❓ الحالة: لم يؤكد الموظف
+❓ الحالة: لم يؤكد الموظف وفات الوقت
 
-📋 يرجى المتابعة مع الموظف واتخاذ القرار المناسب:
+📋 تم نقل الطلب إلى قائمة "الطلبات المنتهية"
+يرجى مراجعة الطلبات المنتهية واتخاذ القرار:
 - تأكيد التبديل يدوياً
 - أو رفض التبديل يدوياً
-
-⚠️ لن يتم الرفض تلقائياً - القرار بيدك.
                 """
                 send_telegram_message(supervisor.supervisor_profile.phone, supervisor_message)
         
@@ -441,11 +435,11 @@ def cancel_expired_confirmations():
             minutes_before=0  # إشعار بعد انتهاء المدة
         )
         
-        notified_count += 1
+        marked_count += 1
     
-    if notified_count > 0:
-        print(f"📢 تم إرسال {notified_count} إشعار للمشرفين عن تبديلات غير مؤكدة")
+    if marked_count > 0:
+        print(f"📢 تم وضع علامة على {marked_count} طلب كمنتهي غير مؤكد")
     else:
-        print("✓ جميع التبديلات إما مؤكدة أو تم الإشعار عنها مسبقاً")
+        print("✓ جميع التبديلات إما مؤكدة أو تم وضع علامة عليها مسبقاً")
     
-    return notified_count
+    return marked_count

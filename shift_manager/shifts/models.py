@@ -135,6 +135,10 @@ class EmployeeAssignment(models.Model):
         related_name='confirmed_assignments',
         verbose_name='المشرف المؤكد'
     )
+    
+    # الطلبات المنتهية غير المؤكدة
+    is_expired_unconfirmed = models.BooleanField(default=False, verbose_name='منتهي غير مؤكد')
+    expired_at = models.DateTimeField(null=True, blank=True, verbose_name='وقت الانتهاء')
 
     class Meta:
         verbose_name = 'إسناد موظف'

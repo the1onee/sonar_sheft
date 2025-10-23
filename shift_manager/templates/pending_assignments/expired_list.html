@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+
+{% block title %}الطلبات المنتهية غير المؤكدة - نظام إدارة الورديات{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-item {
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-sm {
+        padding: 5px 15px;
+        font-size: 0.875rem;
+    }
+    
+    .shift-badge {
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .shift-morning {
+        background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);
+        color: white;
+    }
+    
+    .shift-evening {
+        background: linear-gradient(135deg, #F59E0B 0%, #EA580C 100%);
+        color: white;
+    }
+    
+    .shift-night {
+        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+        color: white;
+    }
+    
+    .expired-badge {
+        background: #FEE2E2;
+        color: #991B1B;
+        padding: 6px 15px;
+        border-radius: 15px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .time-expired {
+        color: #DC2626;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container">
+        <!-- إحصائيات -->
+        <div class="stats-card">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="stat-item">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        <div class="stat-number">{{ total_expired }}</div>
+                        <div class="stat-label">طلب منتهي غير مؤكد</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <span><i class="fas fa-exclamation-triangle"></i> الطلبات المنتهية غير المؤكدة</span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if expired_assignments %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th><i class="fas fa-user"></i> الموظف</th>
+                                <th><i class="fas fa-satellite-dish"></i> السونار</th>
+                                <th><i class="fas fa-clock"></i> الشفت</th>
+                                <th><i class="fas fa-calendar"></i> وقت التبديل</th>
+                                <th><i class="fas fa-hourglass-end"></i> وقت الانتهاء</th>
+                                <th><i class="fas fa-stopwatch"></i> مر عليه</th>
+                                <th><i class="fas fa-info-circle"></i> الحالة</th>
+                                <th><i class="fas fa-cogs"></i> الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in expired_assignments %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>
+                                    <strong>{{ assignment.employee.name }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-satellite-dish"></i> {{ assignment.sonar.name }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if assignment.shift.name == 'morning' %}
+                                        <span class="shift-badge shift-morning">
+                                            <i class="fas fa-sun"></i> صباحي
+                                        </span>
+                                    {% elif assignment.shift.name == 'evening' %}
+                                        <span class="shift-badge shift-evening">
+                                            <i class="fas fa-cloud-sun"></i> مسائي
+                                        </span>
+                                    {% elif assignment.shift.name == 'night' %}
+                                        <span class="shift-badge shift-night">
+                                            <i class="fas fa-moon"></i> ليلي
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                                <td>
+                                    <small>{{ assignment.expired_at|date:"Y-m-d H:i" }}</small>
+                                </td>
+                                <td>
+                                    <span class="time-expired">
+                                        <i class="fas fa-clock"></i> {{ assignment.time_since_expiry }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="expired-badge">
+                                        <i class="fas fa-exclamation-triangle"></i> منتهي
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="{% url 'confirm_assignment' assignment.pk %}" class="btn btn-success btn-sm" title="تأكيد يدوياً">
+                                            <i class="fas fa-check"></i> تأكيد
+                                        </a>
+                                        <a href="{% url 'reject_assignment' assignment.pk %}" class="btn btn-danger btn-sm" title="رفض يدوياً">
+                                            <i class="fas fa-times"></i> رفض
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-check-circle fa-4x mb-3" style="opacity: 0.3; color: #10B981;"></i>
+                    <p class="text-muted">لا يوجد طلبات منتهية! جميع الطلبات تم تأكيدها في الوقت المحدد ✅</p>
+                    <a href="{% url 'pending_assignments_list' %}" class="btn btn-primary">
+                        <i class="fas fa-hourglass-half"></i> عرض الطلبات المعلقة
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="alert alert-warning mt-4">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>ملاحظة:</strong> هذه الطلبات لم يؤكدها الموظف خلال الفترة المحددة وفات وقتها.
+            النظام لا يقوم برفضها تلقائياً، يجب على المشرف مراجعتها واتخاذ القرار المناسب:
+            <ul class="mb-0 mt-2">
+                <li>تأكيد الطلب يدوياً إذا تم تنفيذ التبديل فعلياً</li>
+                <li>رفض الطلب يدوياً إذا لم يتم تنفيذ التبديل</li>
+            </ul>
+        </div>
+        
+        <div class="mt-3">
+            <a href="{% url 'pending_assignments_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> عودة للطلبات المعلقة
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
