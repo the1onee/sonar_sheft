@@ -454,3 +454,34 @@ def cancel_expired_confirmations():
         print("✓ جميع التبديلات إما مؤكدة أو تم الإشعار عنها مسبقاً")
 
     return notified_count
+
+
+def create_default_shifts():
+    """إنشاء الشفتات الافتراضية الثلاثة إذا لم تكن موجودة"""
+    from .models import Shift
+    
+    shifts_data = [
+        {'name': 'morning', 'start_hour': 7, 'end_hour': 15},
+        {'name': 'evening', 'start_hour': 15, 'end_hour': 23},
+        {'name': 'night', 'start_hour': 23, 'end_hour': 7},
+    ]
+    
+    created_count = 0
+    for shift_data in shifts_data:
+        shift, created = Shift.objects.get_or_create(
+            name=shift_data['name'],
+            defaults={
+                'start_hour': shift_data['start_hour'],
+                'end_hour': shift_data['end_hour']
+            }
+        )
+        if created:
+            print(f"✅ تم إنشاء شفت: {shift.get_name_display()}")
+            created_count += 1
+    
+    if created_count == 0:
+        print("✓ الشفتات موجودة مسبقاً")
+    else:
+        print(f"✅ تم إنشاء {created_count} شفت")
+    
+    return created_count
