@@ -97,7 +97,7 @@ def admin_dashboard(request):
     total_employees = Employee.objects.count()
     total_sonars = Sonar.objects.count()
     total_assignments = EmployeeAssignment.objects.count()
-    pending_assignments = EmployeeAssignment.objects.filter(confirmed=False).exclude(confirmation__isnull=False).count()
+    pending_assignments = EmployeeAssignment.objects.filter(employee_confirmed=False).count()
     
     # آخر العمليات
     recent_assignments = EmployeeAssignment.objects.order_by('-assigned_at')[:10]
@@ -122,7 +122,7 @@ def manager_dashboard(request):
     total_supervisors = Supervisor.objects.filter(created_by=request.user, is_active=True).count()
     total_employees = Employee.objects.filter(created_by=request.user).count()
     total_sonars = Sonar.objects.count()
-    pending_assignments = EmployeeAssignment.objects.filter(confirmed=False).exclude(confirmation__isnull=False).count()
+    pending_assignments = EmployeeAssignment.objects.filter(employee_confirmed=False).count()
     
     # الإعدادات الحالية
     settings = SystemSettings.get_current_settings()
@@ -148,11 +148,11 @@ def manager_dashboard(request):
 def supervisor_dashboard(request):
     """لوحة تحكم المشرف"""
     # إحصائيات المشرف
-    pending_assignments = EmployeeAssignment.objects.filter(confirmed=False).exclude(confirmation__isnull=False).count()
-    confirmed_today = AssignmentConfirmation.objects.filter(
-        confirmed_at__date=timezone.now().date(),
-        status='confirmed',
-        confirmed_by=request.user
+    pending_assignments = EmployeeAssignment.objects.filter(employee_confirmed=False).count()
+    confirmed_today = EmployeeAssignment.objects.filter(
+        supervisor_confirmed_at__date=timezone.now().date(),
+        supervisor_confirmed=True,
+        supervisor_confirmed_by=request.user
     ).count()
     employees_on_leave = Employee.objects.filter(is_on_leave=True).count()
     active_sonars = Sonar.objects.filter(active=True).count()
@@ -185,9 +185,7 @@ def supervisor_dashboard(request):
     
     # التبديلات المعلقة
     pending_list = EmployeeAssignment.objects.filter(
-        confirmed=False
-    ).exclude(
-        confirmation__isnull=False
+        employee_confirmed=False
     ).select_related('employee', 'sonar', 'shift').order_by('-assigned_at')[:10]
     
     context = {
@@ -235,7 +233,7 @@ def employee_dashboard(request):
     confirmed_today = today_assignments.filter(supervisor_confirmed=True).count()
     
     # التبديلات المعلقة اليوم
-    pending_today = today_assignments.filter(supervisor_confirmed=False).exclude(confirmation__isnull=False).count()
+    pending_today = today_assignments.filter(supervisor_confirmed=False).count()
     
     # آخر 10 تبديلات
     recent_assignments = EmployeeAssignment.objects.filter(
