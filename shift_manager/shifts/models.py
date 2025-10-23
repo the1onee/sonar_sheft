@@ -6,6 +6,7 @@ from django.forms import DateField
 from django.utils import timezone
 from django.contrib.auth.models import User
 
+
 class Manager(models.Model):
     """موديل المدير - مسؤول عن إضافة المشرفين والموظفين وإعدادات التبديل"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='manager_profile')
@@ -13,52 +14,56 @@ class Manager(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True, verbose_name='رقم الهاتف')
     is_active = models.BooleanField(default=True, verbose_name='نشط')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
-    
+
     class Meta:
         verbose_name = 'مدير'
         verbose_name_plural = 'المديرين'
-    
+
     def __str__(self):
         return self.name
+
 
 class Supervisor(models.Model):
     """موديل المشرف - مسؤول عن الإجازات والتأكيدات وحالة السونارات"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='supervisor_profile')
     name = models.CharField(max_length=100, verbose_name='اسم المشرف')
     phone = models.CharField(max_length=20, blank=True, null=True, verbose_name='رقم الهاتف')
-    assigned_shift = models.ForeignKey('Shift', on_delete=models.SET_NULL, null=True, blank=True, related_name='supervisors', verbose_name='الشفت المسؤول عنه')
+    assigned_shift = models.ForeignKey('Shift', on_delete=models.SET_NULL, null=True, blank=True,
+                                       related_name='supervisors', verbose_name='الشفت المسؤول عنه')
     is_active = models.BooleanField(default=True, verbose_name='نشط')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_supervisors', verbose_name='أنشئ بواسطة')
-    
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='created_supervisors', verbose_name='أنشئ بواسطة')
+
     class Meta:
         verbose_name = 'مشرف'
         verbose_name_plural = 'المشرفين'
-    
+
     def __str__(self):
         return self.name
-    
+
     def get_employees(self):
         """الحصول على الموظفين المخصصين لشفت المشرف"""
         if not self.assigned_shift:
             return Employee.objects.none()
-        
+
         # الموظفين المسندين لهذا الشفت في الجدولة الأسبوعية
         from datetime import date
         today = date.today()
-        
+
         # البحث في الجدولة الأسبوعية
         weekly_assignments = WeeklyShiftAssignment.objects.filter(
             shift=self.assigned_shift,
             week_start_date__lte=today,
             week_end_date__gte=today
         )
-        
+
         employee_ids = set()
         for assignment in weekly_assignments:
             employee_ids.update(assignment.employees.values_list('id', flat=True))
-        
+
         return Employee.objects.filter(id__in=employee_ids)
+
 
 class Employee(models.Model):
     """موديل الموظف - مسؤول عن تأكيد التبديل فقط"""
@@ -67,12 +72,13 @@ class Employee(models.Model):
     telegram_id = models.CharField(max_length=50, null=True, blank=True, verbose_name='معرف تليجرام')
     is_on_leave = models.BooleanField(default=False, verbose_name='في إجازة')
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True, verbose_name='تاريخ الإنشاء')
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_employees', verbose_name='أنشئ بواسطة')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='created_employees', verbose_name='أنشئ بواسطة')
 
     class Meta:
         verbose_name = 'موظف'
         verbose_name_plural = 'الموظفين'
-    
+
     def __str__(self):
         return self.name
 
@@ -84,7 +90,6 @@ class Sonar(models.Model):
 
     def __str__(self):
         return self.name
-
 
 
 class Shift(models.Model):
@@ -101,12 +106,14 @@ class Shift(models.Model):
     def __str__(self):
         return dict(self.SHIFT_CHOICES).get(self.name, self.name)
 
+
 class WeeklyShiftAssignment(models.Model):
     shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
     employees = ManyToManyField(Employee)  # ✅ جمع
 
     week_start_date = models.DateField(default=date.today)  # ✅ تاريخ افتراضي
     week_end_date = models.DateField(default=date.today)  # ✅ تاريخ افتراضي
+
     def __str__(self):
         return f"{self.shift.name} - {self.week_start_date}"
 
@@ -119,26 +126,22 @@ class EmployeeAssignment(models.Model):
     rotation_number = models.IntegerField(default=0)
     confirmed = models.BooleanField(default=False)  # هل تم تأكيد التبديل؟
     notification_sent = models.BooleanField(default=False)  # هل تم إرسال الإشعار؟
-    
+
     # تأكيد الموظف
     employee_confirmed = models.BooleanField(default=False, verbose_name='تأكيد الموظف')
     employee_confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name='وقت تأكيد الموظف')
-    
+
     # تأكيد المشرف
     supervisor_confirmed = models.BooleanField(default=False, verbose_name='تأكيد المشرف')
     supervisor_confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name='وقت تأكيد المشرف')
     supervisor_confirmed_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
         related_name='confirmed_assignments',
         verbose_name='المشرف المؤكد'
     )
-    
-    # الطلبات المنتهية غير المؤكدة
-    is_expired_unconfirmed = models.BooleanField(default=False, verbose_name='منتهي غير مؤكد')
-    expired_at = models.DateTimeField(null=True, blank=True, verbose_name='وقت الانتهاء')
 
     class Meta:
         verbose_name = 'إسناد موظف'
@@ -155,32 +158,32 @@ class AssignmentConfirmation(models.Model):
         ('confirmed', 'مؤكد'),
         ('rejected', 'مرفوض'),
     ]
-    
+
     assignment = models.OneToOneField(
-        EmployeeAssignment, 
-        on_delete=models.CASCADE, 
+        EmployeeAssignment,
+        on_delete=models.CASCADE,
         related_name='confirmation',
         verbose_name='التبديل'
     )
     status = models.CharField(
-        max_length=20, 
-        choices=STATUS_CHOICES, 
+        max_length=20,
+        choices=STATUS_CHOICES,
         verbose_name='الحالة'
     )
     confirmed_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
+        User,
+        on_delete=models.SET_NULL,
         null=True,
         verbose_name='تم التأكيد/الرفض بواسطة'
     )
     confirmed_at = models.DateTimeField(auto_now_add=True, verbose_name='وقت التأكيد/الرفض')
     notes = models.TextField(blank=True, null=True, verbose_name='ملاحظات')
-    
+
     class Meta:
         verbose_name = 'تأكيد تبديل'
         verbose_name_plural = 'تأكيدات التبديلات'
         ordering = ['-confirmed_at']
-    
+
     def __str__(self):
         status_icon = '✅' if self.status == 'confirmed' else '❌'
         return f"{status_icon} {self.assignment} - {self.confirmed_at.strftime('%Y-%m-%d %H:%M')}"
@@ -188,27 +191,27 @@ class AssignmentConfirmation(models.Model):
 
 class SystemSettings(models.Model):
     """موديل إعدادات النظام - إعدادات التبديل والإشعارات"""
-    
+
     # إعدادات التبديل
     rotation_interval_hours = models.FloatField(
         default=3.0,
         verbose_name='فترة التبديل (بالساعات)',
         help_text='مثال: 2.5 = كل ساعتين ونصف'
     )
-    
+
     # إعدادات الإشعارات
     early_notification_minutes = models.IntegerField(
         default=30,
         verbose_name='الإشعار المبكر (بالدقائق)',
         help_text='كم دقيقة قبل التبديل الفعلي يتم إرسال الإشعار'
     )
-    
+
     # إعدادات النظام
     is_rotation_active = models.BooleanField(
         default=True,
         verbose_name='تفعيل التبديل التلقائي'
     )
-    
+
     # تتبع آخر تبديل
     last_rotation_time = models.DateTimeField(
         null=True,
@@ -216,32 +219,32 @@ class SystemSettings(models.Model):
         verbose_name='آخر وقت تبديل',
         help_text='آخر وقت تم فيه تنفيذ التبديل التلقائي'
     )
-    
+
     # تواريخ الإنشاء والتحديث
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='تاريخ الإنشاء')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='تاريخ آخر تحديث')
     updated_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
+        User,
+        on_delete=models.SET_NULL,
         null=True,
         verbose_name='آخر تحديث بواسطة'
     )
-    
+
     class Meta:
         verbose_name = 'إعدادات النظام'
         verbose_name_plural = 'إعدادات النظام'
-    
+
     def __str__(self):
         return f"إعدادات النظام - التبديل كل {self.rotation_interval_hours} ساعة"
-    
+
     def get_effective_rotation_hours(self):
         """إرجاع ساعات التبديل كما هي (بدون طرح)"""
         return self.rotation_interval_hours
-    
+
     def get_next_rotation_time(self):
         """حساب وقت التبديل التالي بناءً على آخر تبديل"""
         from datetime import timedelta
-        
+
         # إذا كان هناك آخر تبديل، نحسب بناءً عليه
         if self.last_rotation_time:
             next_time = self.last_rotation_time + timedelta(hours=self.get_effective_rotation_hours())
@@ -249,14 +252,14 @@ class SystemSettings(models.Model):
             # إذا لم يتم التبديل بعد، نحسب من الوقت الحالي
             now = timezone.localtime(timezone.now())
             next_time = now + timedelta(hours=self.get_effective_rotation_hours())
-        
+
         return next_time
-    
+
     def update_last_rotation_time(self):
         """تحديث وقت آخر تبديل إلى الوقت الحالي"""
         self.last_rotation_time = timezone.now()
         self.save(update_fields=['last_rotation_time'])
-    
+
     @classmethod
     def get_current_settings(cls):
         """الحصول على الإعدادات الحالية أو إنشاء إعدادات افتراضية"""
@@ -300,12 +303,12 @@ class EarlyNotification(models.Model):
         default=30,
         verbose_name='الدقائق المتبقية عند الإرسال'
     )
-    
+
     class Meta:
         verbose_name = 'إشعار مبكر'
         verbose_name_plural = 'الإشعارات المبكرة'
         # إزالة unique_together للسماح بإشعارات متعددة
-    
+
     def __str__(self):
         return f"إشعار {self.notification_type} - {self.get_notification_stage_display()} - {self.assignment}"
 
@@ -320,7 +323,7 @@ class CustomNotification(models.Model):
         verbose_name='المرسل'
     )
     sent_at = models.DateTimeField(auto_now_add=True, verbose_name='وقت الإرسال')
-    
+
     # الموظفون المستهدفون
     target_employees = models.ManyToManyField(
         Employee,
@@ -332,14 +335,14 @@ class CustomNotification(models.Model):
         default=False,
         verbose_name='إرسال لجميع الموظفين'
     )
-    
+
     # إحصائيات
     total_sent = models.IntegerField(default=0, verbose_name='عدد المرسل إليهم')
-    
+
     class Meta:
         verbose_name = 'إشعار مخصص'
         verbose_name_plural = 'الإشعارات المخصصة'
         ordering = ['-sent_at']
-    
+
     def __str__(self):
         return f"{self.title} - {self.sent_by.username} ({self.sent_at.strftime('%Y-%m-%d %H:%M')})"
