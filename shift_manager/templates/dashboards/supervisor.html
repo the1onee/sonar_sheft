@@ -313,6 +313,97 @@
         </div>
     </div>
 
+    <!-- إحصائيات الموظفين وساعات العمل -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card" style="border-top: 4px solid #4F46E5;">
+                <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line"></i>
+                        إحصائيات ساعات عمل الموظفين
+                        <span class="badge bg-light text-primary ms-2">المتوسط: {{ avg_work_hours|floatformat:1 }} ساعة</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- الموظفين الذين عملوا كثيراً -->
+                    {% if top_workers %}
+                    <div class="mb-4">
+                        <h6 class="text-danger"><i class="fas fa-fire"></i> الموظفين الذين عملوا أكثر من المتوسط (يحتاجون راحة)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-danger">
+                                    <tr>
+                                        <th>الموظف</th>
+                                        <th>ساعات العمل</th>
+                                        <th>الفرق عن المتوسط</th>
+                                        <th>آخر عمل</th>
+                                        <th>الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for stat in top_workers %}
+                                    <tr>
+                                        <td><strong>{{ stat.employee.name }}</strong></td>
+                                        <td><span class="badge bg-danger">{{ stat.total_work_hours|floatformat:1 }} ساعة</span></td>
+                                        <td><span class="text-danger">+{{ stat.diff_from_avg|floatformat:1 }} ساعة</span></td>
+                                        <td>
+                                            {% if stat.last_work %}
+                                                <small>{{ stat.last_work|date:"Y-m-d H:i" }}</small>
+                                            {% else %}
+                                                <small class="text-muted">-</small>
+                                            {% endif %}
+                                        </td>
+                                        <td><span class="badge" style="background: #FEE2E2; color: #991B1B;">🔻 يحتاج راحة</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- الموظفين الذين عملوا قليلاً -->
+                    {% if need_work %}
+                    <div class="mb-3">
+                        <h6 class="text-success"><i class="fas fa-arrow-up"></i> الموظفين تحت المتوسط (يحتاجون عمل أكثر)</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th>الموظف</th>
+                                        <th>ساعات العمل</th>
+                                        <th>الفرق عن المتوسط</th>
+                                        <th>مرات الراحة المتتالية</th>
+                                        <th>الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for stat in need_work %}
+                                    <tr>
+                                        <td><strong>{{ stat.employee.name }}</strong></td>
+                                        <td><span class="badge bg-success">{{ stat.total_work_hours|floatformat:1 }} ساعة</span></td>
+                                        <td><span class="text-success">{{ stat.diff_from_avg|floatformat:1 }} ساعة</span></td>
+                                        <td><span class="badge bg-info">{{ stat.consecutive_rest }}</span></td>
+                                        <td><span class="badge" style="background: #D1FAE5; color: #065F46;">🔺 أولوية للعمل</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if not top_workers and not need_work %}
+                    <div class="alert alert-success text-center">
+                        <i class="fas fa-balance-scale fa-3x mb-3"></i>
+                        <p>جميع الموظفين متوازنون! الفرق أقل من ساعة واحدة ⚖️</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- قوائم سريعة -->
     <div class="row">
         <div class="col-md-6 mb-4">

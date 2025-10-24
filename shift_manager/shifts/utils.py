@@ -273,102 +273,164 @@ def rotate_within_shift(shift_name, rotation_hours=None):
     current_rotation_start = shift_start + timedelta(hours=rotation_index * rotation_hours)
     current_rotation_end = min(current_rotation_start + timedelta(hours=rotation_hours), shift_end)
 
-    # إنشاء قاموس لتعقب عدد المرات التي تم فيها تدوير كل موظف
-    rotation_counter = {emp.id: 0 for emp in employees}
-
-    # خلط ترتيب الموظفين عشوائيًا لتوزيع عادل
-    random.shuffle(employees)
-
-    # خلط السونارات أيضاً لتوزيع عشوائي
-    random.shuffle(active_sonars)
-
-    # 📊 قاموس لتتبع عدد الموظفين المعينين لكل سونار في هذا التدوير
+    # 🎯 نظام التبديل العادل - ترتيب الموظفين حسب الأولوية
+    print("\n📊 حساب أولويات الموظفين للتبديل العادل...")
+    
+    # حساب متوسط ساعات العمل لجميع الموظفين
+    total_work_hours = sum(emp.total_work_hours for emp in employees)
+    avg_work_hours = total_work_hours / len(employees) if len(employees) > 0 else 0.0
+    print(f"  📊 متوسط ساعات العمل للجميع: {avg_work_hours:.1f} ساعة")
+    
+    # حساب نقاط الأولوية لكل موظف
+    employee_priorities = []
+    for emp in employees:
+        priority_score = emp.get_priority_score(avg_work_hours)
+        diff_from_avg = emp.total_work_hours - avg_work_hours
+        employee_priorities.append((emp, priority_score))
+        
+        # رمز الحالة
+        if diff_from_avg < -1:
+            status = "🔺 يحتاج عمل"
+        elif diff_from_avg > 1:
+            status = "🔻 يحتاج راحة"
+        else:
+            status = "⚖️ متوازن"
+        
+        print(f"  📌 {emp.name}: نقاط={priority_score:.1f} | عمل={emp.total_work_hours:.1f}س | فرق عن المتوسط={diff_from_avg:+.1f}س | {status}")
+    
+    # ترتيب الموظفين حسب الأولوية (الأقل نقاطاً = الأعلى أولوية للعمل)
+    employee_priorities.sort(key=lambda x: x[1])
+    sorted_employees = [emp for emp, score in employee_priorities]
+    
+    print("\n🔄 ترتيب الأولوية للعمل (من الأعلى للأقل):")
+    for i, (emp, score) in enumerate(employee_priorities[:10], 1):  # عرض أول 10 فقط
+        diff = emp.total_work_hours - avg_work_hours
+        print(f"  {i}. {emp.name} (نقاط: {score:.1f} | عمل: {emp.total_work_hours:.1f}س | فرق: {diff:+.1f}س)")
+    
+    # حساب إجمالي المقاعد المتاحة في جميع السونارات
+    total_available_slots = sum(sonar.max_employees for sonar in active_sonars)
+    
+    print(f"\n📍 إجمالي المقاعد المتاحة: {total_available_slots}")
+    print(f"📍 إجمالي الموظفين: {len(sorted_employees)}")
+    
+    # تقسيم الموظفين إلى: عاملين + احتياط
+    working_employees = sorted_employees[:total_available_slots]
+    standby_employees = sorted_employees[total_available_slots:]
+    
+    print(f"\n✅ الموظفين العاملين: {len(working_employees)}")
+    print(f"💤 الموظفين في الاحتياط: {len(standby_employees)}")
+    
+    # 📊 قاموس لتتبع عدد الموظفين المعينين لكل سونار
     sonar_assignment_count = {sonar.id: 0 for sonar in active_sonars}
-
-    # 📝 قائمة للموظفين الذين تم توزيعهم
-    assigned_employees = []
-    remaining_employees = employees.copy()
-
-    # 🎯 المرحلة الأولى: توزيع موظف واحد على كل سونار نشط
-    print("📍 المرحلة 1: توزيع موظف واحد لكل سونار...")
-    for sonar in active_sonars:
-        if not remaining_employees:
-            break
-
-        emp = remaining_employees.pop(0)
-
-        # 🧾 حفظ التعيين الجديد في قاعدة البيانات
-        EmployeeAssignment.objects.create(
-            employee=emp,
-            sonar=sonar,
-            shift=shift,
-            assigned_at=current_rotation_start,
-            rotation_number=rotation_counter[emp.id] + 1
-        )
-
-        sonar_assignment_count[sonar.id] += 1
-        rotation_counter[emp.id] += 1
-        assigned_employees.append((emp, sonar))
-
-        print(f"  ✅ {emp.name} → {sonar.name} (1/{sonar.max_employees})")
-
-    # 🎯 المرحلة الثانية: توزيع الموظفين المتبقيين على السونارات التي تستوعب أكثر
-    if remaining_employees:
-        print(f"📍 المرحلة 2: توزيع {len(remaining_employees)} موظف متبقي...")
-
-        for emp in remaining_employees:
-            # البحث عن السونارات التي لم تصل لسعتها القصوى
-            available_sonars = [
-                sonar for sonar in active_sonars
-                if sonar_assignment_count[sonar.id] < sonar.max_employees
-            ]
-
-            if not available_sonars:
-                print(f"  ⚠️ لا توجد سونارات متاحة للموظف {emp.name} - جميع السونارات ممتلئة")
-                continue
-
-            # اختيار سونار عشوائي من السونارات المتاحة
-            new_sonar = random.choice(available_sonars)
-
+    
+    # خلط السونارات لتوزيع عشوائي عادل
+    shuffled_sonars = active_sonars.copy()
+    random.shuffle(shuffled_sonars)
+    
+    # 📝 قوائم لتتبع التوزيع
+    work_assignments = []  # (موظف, سونار)
+    standby_assignments = []  # موظف
+    
+    # 🎯 المرحلة الأولى: توزيع الموظفين العاملين على السونارات
+    print("\n📍 المرحلة 1: توزيع الموظفين على السونارات حسب الأولوية...")
+    
+    employee_index = 0
+    for sonar in shuffled_sonars:
+        for slot in range(sonar.max_employees):
+            if employee_index >= len(working_employees):
+                break
+            
+            emp = working_employees[employee_index]
+            
             # 🧾 حفظ التعيين الجديد في قاعدة البيانات
-            EmployeeAssignment.objects.create(
+            assignment = EmployeeAssignment.objects.create(
                 employee=emp,
-                sonar=new_sonar,
+                sonar=sonar,
                 shift=shift,
                 assigned_at=current_rotation_start,
-                rotation_number=rotation_counter[emp.id] + 1
+                rotation_number=0,
+                is_standby=False,  # الموظف يعمل
+                work_duration_hours=rotation_hours
             )
-
-            sonar_assignment_count[new_sonar.id] += 1
-            rotation_counter[emp.id] += 1
-            assigned_employees.append((emp, new_sonar))
-
-            print(
-                f"  ✅ {emp.name} → {new_sonar.name} ({sonar_assignment_count[new_sonar.id]}/{new_sonar.max_employees})")
-
-    # 📨 إرسال إشعارات تليغرام لجميع الموظفين
-    print("📤 إرسال الإشعارات...")
-    for emp, sonar in assigned_employees:
+            
+            # تحديث إحصائيات الموظف
+            emp.total_work_hours += rotation_hours
+            emp.last_work_datetime = current_rotation_start
+            emp.consecutive_rest_count = 0  # إعادة تعيين عداد الراحة
+            emp.save()
+            
+            sonar_assignment_count[sonar.id] += 1
+            work_assignments.append((emp, sonar))
+            employee_index += 1
+            
+            print(f"  ✅ {emp.name} → {sonar.name} ({sonar_assignment_count[sonar.id]}/{sonar.max_employees})")
+    
+    # 🎯 المرحلة الثانية: تسجيل الموظفين في الاحتياط
+    if standby_employees:
+        print(f"\n📍 المرحلة 2: تسجيل {len(standby_employees)} موظف في حالة احتياط...")
+        
+        for emp in standby_employees:
+            # 🧾 حفظ التعيين كاحتياط (بدون سونار)
+            assignment = EmployeeAssignment.objects.create(
+                employee=emp,
+                sonar=None,  # لا يوجد سونار للاحتياط
+                shift=shift,
+                assigned_at=current_rotation_start,
+                rotation_number=0,
+                is_standby=True,  # الموظف في احتياط
+                work_duration_hours=0.0  # لا يعمل
+            )
+            
+            # تحديث عداد الراحة المتتالية
+            emp.consecutive_rest_count += 1
+            emp.save()
+            
+            standby_assignments.append(emp)
+            print(f"  💤 {emp.name} - في حالة احتياط (راحة)")
+    
+    # 📨 إرسال إشعارات تليغرام للموظفين العاملين
+    print("\n📤 إرسال الإشعارات...")
+    for emp, sonar in work_assignments:
         msg = (
             f"📢 تم تعيينك في السونار الجديد: {sonar.name}\n"
             f"🕒 الشفت: {shift.name}\n"
-            f"⏰ من {current_rotation_start.strftime('%H:%M')} إلى {current_rotation_end.strftime('%H:%M')}"
+            f"⏰ من {current_rotation_start.strftime('%H:%M')} إلى {current_rotation_end.strftime('%H:%M')}\n"
+            f"📊 إجمالي ساعات عملك: {emp.total_work_hours:.1f} ساعة"
         )
         send_telegram_message(emp.telegram_id, msg)
-
+    
+    # 📨 إرسال إشعارات للموظفين في الاحتياط
+    for emp in standby_assignments:
+        msg = (
+            f"💤 أنت في حالة احتياط (راحة) للفترة الحالية\n"
+            f"🕒 الشفت: {shift.name}\n"
+            f"⏰ من {current_rotation_start.strftime('%H:%M')} إلى {current_rotation_end.strftime('%H:%M')}\n"
+            f"📊 إجمالي ساعات عملك: {emp.total_work_hours:.1f} ساعة\n"
+            f"🔄 مرات الراحة المتتالية: {emp.consecutive_rest_count}\n\n"
+            f"✨ سيتم إعطاؤك الأولوية في التبديل القادم!"
+        )
+        send_telegram_message(emp.telegram_id, msg)
+    
     # ✅ تأكيد اكتمال العملية بنجاح
-    print(f"✅ تم توزيع {len(assigned_employees)} موظف للشفت {shift.name} بنجاح")
+    print(f"\n✅ تم توزيع {len(work_assignments)} موظف للعمل في الشفت {shift.name}")
+    print(f"💤 تم تسجيل {len(standby_assignments)} موظف في حالة احتياط")
     print(f"⏰ الفترة: {current_rotation_start.strftime('%H:%M')} - {current_rotation_end.strftime('%H:%M')}")
-
+    
     # 🕐 تحديث وقت آخر تبديل في الإعدادات
     settings.update_last_rotation_time()
     print(f"🕐 تم تحديث آخر وقت تبديل: {timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M')}")
-
-    # 📊 عرض ملخص التوزيع
+    
+    # 📊 عرض ملخص التوزيع المفصل
     print("\n📊 ملخص التوزيع:")
+    print("="*60)
     for sonar in active_sonars:
         count = sonar_assignment_count[sonar.id]
-        print(f"  {sonar.name}: {count}/{sonar.max_employees} موظف")
+        print(f"  🏢 {sonar.name}: {count}/{sonar.max_employees} موظف")
+    
+    print(f"\n  💼 إجمالي العاملين: {len(work_assignments)}")
+    print(f"  💤 إجمالي الاحتياط: {len(standby_assignments)}")
+    print(f"  👥 إجمالي الموظفين: {len(employees)}")
+    print("="*60)
 
 
 def cancel_expired_confirmations():

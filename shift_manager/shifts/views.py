@@ -158,6 +158,32 @@ def supervisor_dashboard(request):
     active_sonars = Sonar.objects.filter(active=True).count()
     inactive_sonars = Sonar.objects.filter(active=False).count()
     
+    # 📊 إحصائيات الموظفين وساعات العمل
+    employees_stats = []
+    all_employees = Employee.objects.filter(is_on_leave=False).order_by('name')
+    
+    # حساب متوسط ساعات العمل
+    total_work_hours = sum(emp.total_work_hours for emp in all_employees)
+    avg_work_hours = total_work_hours / all_employees.count() if all_employees.count() > 0 else 0.0
+    
+    for emp in all_employees:
+        diff_from_avg = emp.total_work_hours - avg_work_hours
+        employees_stats.append({
+            'employee': emp,
+            'total_work_hours': emp.total_work_hours,
+            'diff_from_avg': diff_from_avg,
+            'last_work': emp.last_work_datetime,
+            'consecutive_rest': emp.consecutive_rest_count,
+            'priority_score': emp.get_priority_score(avg_work_hours)
+        })
+    
+    # ترتيب حسب ساعات العمل (من الأكثر إلى الأقل)
+    employees_stats.sort(key=lambda x: x['total_work_hours'], reverse=True)
+    
+    # تقسيم الموظفين إلى فئات
+    top_workers = [e for e in employees_stats if e['diff_from_avg'] > 1.0][:5]  # أكثر 5 عملاً
+    need_work = [e for e in employees_stats if e['diff_from_avg'] < -1.0][:5]  # أقل 5 عملاً
+    
     # التبديلات المؤكدة من الموظفين (بانتظار تأكيد المشرف)
     waiting_supervisor_confirmation = EmployeeAssignment.objects.filter(
         employee_confirmed=True,
@@ -201,6 +227,11 @@ def supervisor_dashboard(request):
         'waiting_employee_count': waiting_employee_count,
         'waiting_supervisor_count': waiting_supervisor_count,
         'fully_confirmed_count': fully_confirmed_count,
+        # إحصائيات الموظفين الجديدة
+        'employees_stats': employees_stats,
+        'avg_work_hours': avg_work_hours,
+        'top_workers': top_workers,
+        'need_work': need_work,
     }
     return render(request, 'dashboards/supervisor.html', context)
 
@@ -898,6 +929,28 @@ def reports_view(request):
     # قائمة جميع الشفتات
     all_shifts = Shift.objects.all()
     
+    # 📊 إحصائيات ساعات عمل الموظفين (جميع الموظفين)
+    all_employees = Employee.objects.filter(is_on_leave=False).order_by('name')
+    employees_work_hours = []
+    
+    # حساب متوسط ساعات العمل
+    total_hours = sum(emp.total_work_hours for emp in all_employees)
+    avg_hours = total_hours / all_employees.count() if all_employees.count() > 0 else 0.0
+    
+    for emp in all_employees:
+        diff = emp.total_work_hours - avg_hours
+        employees_work_hours.append({
+            'name': emp.name,
+            'total_work_hours': emp.total_work_hours,
+            'diff_from_avg': diff,
+            'last_work': emp.last_work_datetime,
+            'consecutive_rest': emp.consecutive_rest_count,
+            'status': '🔻 فوق المتوسط' if diff > 1.0 else ('🔺 تحت المتوسط' if diff < -1.0 else '⚖️ متوازن')
+        })
+    
+    # ترتيب حسب ساعات العمل (من الأكثر إلى الأقل)
+    employees_work_hours.sort(key=lambda x: x['total_work_hours'], reverse=True)
+    
     context = {
         'assignments': assignments[:100],  # حد أقصى 100 سجل للعرض
         'total_count': total_count,
@@ -913,6 +966,9 @@ def reports_view(request):
         'date_from': date_from,
         'date_to': date_to,
         'status_filter': status_filter,
+        # إحصائيات ساعات العمل الجديدة
+        'employees_work_hours': employees_work_hours,
+        'avg_work_hours': avg_hours,
     }
     
     return render(request, 'reports/index.html', context)

@@ -380,6 +380,88 @@
                 {% endfor %}
             </div>
         </div>
+
+        <!-- ساعات عمل الموظفين -->
+        <div class="chart-container" style="background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);">
+            <div class="chart-title" style="color: #1F2937;">
+                <i class="fas fa-clock"></i> ساعات عمل الموظفين
+                <span class="badge" style="background: #4F46E5; font-size: 0.9rem;">المتوسط: {{ avg_work_hours|floatformat:1 }} ساعة</span>
+            </div>
+            
+            {% if employees_work_hours %}
+            <div class="table-responsive">
+                <table class="table table-hover" style="background: white;">
+                    <thead style="background: #4F46E5; color: white;">
+                        <tr>
+                            <th>#</th>
+                            <th>الموظف</th>
+                            <th>إجمالي ساعات العمل</th>
+                            <th>الفرق عن المتوسط</th>
+                            <th>آخر عمل</th>
+                            <th>مرات الراحة المتتالية</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp_stat in employees_work_hours %}
+                        <tr {% if emp_stat.diff_from_avg > 1.0 %}style="background: #FEE2E2;"{% elif emp_stat.diff_from_avg < -1.0 %}style="background: #D1FAE5;"{% endif %}>
+                            <td>{{ forloop.counter }}</td>
+                            <td><strong>{{ emp_stat.name }}</strong></td>
+                            <td>
+                                <span class="badge" style="background: {% if emp_stat.diff_from_avg > 1.0 %}#DC2626{% elif emp_stat.diff_from_avg < -1.0 %}#059669{% else %}#6B7280{% endif %}; font-size: 1rem; padding: 8px 12px;">
+                                    {{ emp_stat.total_work_hours|floatformat:1 }} ساعة
+                                </span>
+                            </td>
+                            <td>
+                                {% if emp_stat.diff_from_avg > 0 %}
+                                    <span class="text-danger" style="font-weight: 600;">+{{ emp_stat.diff_from_avg|floatformat:1 }} ساعة</span>
+                                {% elif emp_stat.diff_from_avg < 0 %}
+                                    <span class="text-success" style="font-weight: 600;">{{ emp_stat.diff_from_avg|floatformat:1 }} ساعة</span>
+                                {% else %}
+                                    <span class="text-muted">{{ emp_stat.diff_from_avg|floatformat:1 }} ساعة</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if emp_stat.last_work %}
+                                    <small>{{ emp_stat.last_work|date:"Y-m-d H:i" }}</small>
+                                {% else %}
+                                    <small class="text-muted">لم يعمل بعد</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ emp_stat.consecutive_rest }}</span>
+                            </td>
+                            <td>
+                                <span class="badge" style="
+                                    {% if emp_stat.diff_from_avg > 1.0 %}
+                                        background: #FEE2E2; color: #991B1B;
+                                    {% elif emp_stat.diff_from_avg < -1.0 %}
+                                        background: #D1FAE5; color: #065F46;
+                                    {% else %}
+                                        background: #F3F4F6; color: #4B5563;
+                                    {% endif %}
+                                ">
+                                    {{ emp_stat.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="alert alert-info mt-3" style="background: #EFF6FF; border: 1px solid #DBEAFE; color: #1E40AF;">
+                <i class="fas fa-info-circle"></i>
+                <strong>ملاحظة:</strong> النظام يقوم بتوزيع الموظفين تلقائياً بناءً على ساعات العمل لضمان العدالة.
+                الموظفين فوق المتوسط 🔻 يحصلون على راحة أكثر، والموظفين تحت المتوسط 🔺 يحصلون على عمل أكثر.
+            </div>
+            {% else %}
+            <div class="alert alert-warning text-center">
+                <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                <p>لا توجد بيانات ساعات عمل</p>
+            </div>
+            {% endif %}
+        </div>
         
         <!-- جدول التبديلات -->
         <div class="table-container">

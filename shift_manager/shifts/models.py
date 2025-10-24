@@ -74,6 +74,11 @@ class Employee(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True, verbose_name='تاريخ الإنشاء')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
                                    related_name='created_employees', verbose_name='أنشئ بواسطة')
+    
+    # 🔄 حقول نظام التبديل العادل
+    total_work_hours = models.FloatField(default=0.0, verbose_name='إجمالي ساعات العمل')
+    last_work_datetime = models.DateTimeField(null=True, blank=True, verbose_name='آخر وقت عمل')
+    consecutive_rest_count = models.IntegerField(default=0, verbose_name='عدد مرات الراحة المتتالية')
 
     class Meta:
         verbose_name = 'موظف'
@@ -81,6 +86,72 @@ class Employee(models.Model):
 
     def __str__(self):
         return self.name
+    
+    def get_work_hours_today(self):
+        """حساب ساعات العمل اليوم"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        today = timezone.localtime(timezone.now()).date()
+        today_start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+        
+        assignments = EmployeeAssignment.objects.filter(
+            employee=self,
+            assigned_at__gte=today_start,
+            is_standby=False  # فقط العمل الفعلي
+        )
+        
+        # حساب إجمالي الساعات
+        total_hours = 0.0
+        for assignment in assignments:
+            # افتراض أن كل تبديل يستمر حسب rotation_interval_hours
+            settings = SystemSettings.get_current_settings()
+            total_hours += settings.rotation_interval_hours
+        
+        return total_hours
+    
+    def get_priority_score(self, avg_work_hours=None):
+        """حساب نقاط الأولوية (أقل = أولوية أعلى للعمل)
+        
+        يأخذ في الاعتبار:
+        1. الفرق عن المتوسط (أهم عامل)
+        2. الوقت منذ آخر عمل
+        3. عدد مرات الراحة المتتالية
+        """
+        from django.utils import timezone
+        
+        # إذا لم يُعطى المتوسط، نحسبه
+        if avg_work_hours is None:
+            all_employees = Employee.objects.filter(is_on_leave=False)
+            if all_employees.count() > 0:
+                total = sum(emp.total_work_hours for emp in all_employees)
+                avg_work_hours = total / all_employees.count()
+            else:
+                avg_work_hours = 0.0
+        
+        # ⭐ العامل الأهم: الفرق عن المتوسط
+        # الموظف الذي عمل أقل من المتوسط → نقاط أقل (أولوية أعلى)
+        # الموظف الذي عمل أكثر من المتوسط → نقاط أعلى (أولوية أقل)
+        score = self.total_work_hours - avg_work_hours
+        
+        # ⭐ إذا لم يعمل الموظف أبداً → أولوية قصوى
+        if self.total_work_hours == 0.0:
+            score -= 1000
+        
+        # ⭐ مكافأة للموظفين الذين لم يعملوا مؤخراً
+        if self.last_work_datetime:
+            hours_since_work = (timezone.now() - self.last_work_datetime).total_seconds() / 3600
+            # كل ساعة راحة = خصم 0.3 نقطة
+            score -= (hours_since_work * 0.3)
+        else:
+            # لم يعمل أبداً → أولوية عالية جداً
+            score -= 500
+        
+        # ⭐ مكافأة إضافية للموظفين الذين استراحوا عدة مرات متتالية
+        # كل مرة راحة = خصم 5 نقاط
+        score -= (self.consecutive_rest_count * 5)
+        
+        return score
 
 
 class Sonar(models.Model):
@@ -120,12 +191,16 @@ class WeeklyShiftAssignment(models.Model):
 
 class EmployeeAssignment(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    sonar = models.ForeignKey(Sonar, on_delete=models.CASCADE)
+    sonar = models.ForeignKey(Sonar, on_delete=models.CASCADE, null=True, blank=True)  # يمكن أن يكون null للاحتياط
     shift = models.ForeignKey(Shift, on_delete=models.CASCADE)
     assigned_at = models.DateTimeField(default=timezone.now)
     rotation_number = models.IntegerField(default=0)
     confirmed = models.BooleanField(default=False)  # هل تم تأكيد التبديل؟
     notification_sent = models.BooleanField(default=False)  # هل تم إرسال الإشعار؟
+    
+    # 🔄 حقل جديد للتبديل العادل
+    is_standby = models.BooleanField(default=False, verbose_name='في حالة احتياط')  # الموظف في راحة/احتياط
+    work_duration_hours = models.FloatField(default=0.0, verbose_name='مدة العمل بالساعات')  # مدة العمل الفعلية
 
     # تأكيد الموظف
     employee_confirmed = models.BooleanField(default=False, verbose_name='تأكيد الموظف')
@@ -149,6 +224,8 @@ class EmployeeAssignment(models.Model):
         ordering = ['-assigned_at']
 
     def __str__(self):
+        if self.is_standby:
+            return f"{self.employee} - احتياط ({self.shift.name})"
         return f"{self.employee} → {self.sonar} ({self.shift.name})"
 
 
@@ -192,11 +269,11 @@ class AssignmentConfirmation(models.Model):
 class SystemSettings(models.Model):
     """موديل إعدادات النظام - إعدادات التبديل والإشعارات"""
 
-    # إعدادات التبديل
+    # إعدادات التبديل (ثابت: 3 ساعات)
     rotation_interval_hours = models.FloatField(
         default=3.0,
-        verbose_name='فترة التبديل (بالساعات)',
-        help_text='مثال: 2.5 = كل ساعتين ونصف'
+        verbose_name='فترة التبديل (بالساعات) - ثابتة',
+        help_text='🔒 القيمة ثابتة: 3 ساعات (لا يمكن تغييرها من الواجهة)'
     )
 
     # إعدادات الإشعارات

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Employee, Sonar, Shift, WeeklyShiftAssignment, EmployeeAssignment, Supervisor, AssignmentConfirmation, Manager
+from .models import Employee, Sonar, Shift, WeeklyShiftAssignment, EmployeeAssignment, Supervisor, AssignmentConfirmation, Manager, SystemSettings
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
@@ -53,3 +53,27 @@ class AssignmentConfirmationAdmin(admin.ModelAdmin):
         'confirmed_by__username'
     )
     readonly_fields = ('confirmed_at',)
+
+@admin.register(SystemSettings)
+class SystemSettingsAdmin(admin.ModelAdmin):
+    list_display = ('rotation_interval_hours', 'early_notification_minutes', 'is_rotation_active', 'last_rotation_time', 'updated_at', 'updated_by')
+    list_filter = ('is_rotation_active',)
+    # جعل rotation_interval_hours للقراءة فقط - ثابت عند 3 ساعات
+    readonly_fields = ('rotation_interval_hours', 'last_rotation_time', 'created_at', 'updated_at')
+    fieldsets = (
+        ('⚙️ إعدادات التبديل', {
+            'fields': ('rotation_interval_hours', 'is_rotation_active', 'last_rotation_time')
+        }),
+        ('📢 إعدادات الإشعارات', {
+            'fields': ('early_notification_minutes',)
+        }),
+        ('📝 معلومات التحديث', {
+            'fields': ('created_at', 'updated_at', 'updated_by')
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """التأكد من أن rotation_interval_hours تبقى 3.0"""
+        obj.rotation_interval_hours = 3.0  # 🔒 ثابت
+        obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
