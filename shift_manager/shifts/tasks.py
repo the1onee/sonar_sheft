@@ -143,3 +143,137 @@ def check_early_notifications_task():
         check_and_send_early_notifications()
     except Exception as e:
         print(f"❌ خطأ في فحص الإشعارات المبكرة: {e}")
+
+
+@shared_task
+def reset_monthly_work_hours():
+    """تصفير ساعات العمل لجميع الموظفين في بداية كل شهر
+    
+    ملاحظة: السجلات التاريخية (EmployeeAssignment) تبقى محفوظة للتقارير
+    فقط ساعات العمل الإجمالية (total_work_hours) تُصفّر للبدء من جديد
+    """
+    from django.utils import timezone
+    from django.contrib.auth.models import User
+    from django.db import models
+    
+    print("\n" + "="*70)
+    print("🔄 بدء عملية تصفير ساعات العمل الشهرية")
+    print("="*70)
+    
+    now = timezone.localtime(timezone.now())
+    current_month = now.strftime('%Y-%m')  # مثال: 2024-10
+    
+    # جلب جميع الموظفين
+    all_employees = Employee.objects.all()
+    total_employees = all_employees.count()
+    
+    if total_employees == 0:
+        print("⚠️ لا يوجد موظفين في النظام")
+        return
+    
+    print(f"\n📊 عدد الموظفين: {total_employees}")
+    print(f"📅 الشهر الحالي: {current_month}")
+    print(f"🕐 الوقت: {now.strftime('%Y-%m-%d %H:%M')}")
+    
+    # إحصائيات قبل التصفير
+    print("\n📈 إحصائيات قبل التصفير:")
+    total_hours_before = sum(emp.total_work_hours for emp in all_employees)
+    avg_hours_before = total_hours_before / total_employees if total_employees > 0 else 0
+    print(f"  • إجمالي الساعات: {total_hours_before:.1f} ساعة")
+    print(f"  • متوسط الساعات: {avg_hours_before:.1f} ساعة/موظف")
+    
+    # عرض أعلى 5 موظفين عملاً
+    top_workers = sorted(all_employees, key=lambda x: x.total_work_hours, reverse=True)[:5]
+    print("\n  🏆 أكثر 5 موظفين عملاً:")
+    for i, emp in enumerate(top_workers, 1):
+        print(f"    {i}. {emp.name}: {emp.total_work_hours:.1f} ساعة")
+    
+    # تصفير ساعات العمل لجميع الموظفين
+    reset_count = 0
+    print("\n🔄 جاري تصفير ساعات العمل...")
+    
+    for emp in all_employees:
+        old_hours = emp.total_work_hours
+        
+        # تصفير الساعات
+        emp.total_work_hours = 0.0
+        emp.last_work_datetime = None
+        emp.consecutive_rest_count = 0
+        emp.save(update_fields=['total_work_hours', 'last_work_datetime', 'consecutive_rest_count'])
+        
+        reset_count += 1
+        if old_hours > 0:
+            print(f"  ✅ {emp.name}: {old_hours:.1f} → 0.0 ساعة")
+    
+    print(f"\n✅ تم تصفير ساعات {reset_count} موظف بنجاح!")
+    
+    # إنشاء سجل التصفير الشهري
+    try:
+        from .models import MonthlyWorkHoursReset
+        
+        reset_record = MonthlyWorkHoursReset.objects.create(
+            year=now.year,
+            month=now.month,
+            total_employees=total_employees,
+            total_hours_before_reset=total_hours_before,
+            average_hours_before_reset=avg_hours_before
+        )
+        print(f"📝 تم حفظ سجل التصفير الشهري (ID: {reset_record.id})")
+    except Exception as e:
+        print(f"⚠️ تحذير: لم يتم حفظ سجل التصفير: {e}")
+    
+    # إرسال إشعارات للمشرفين/المديرين
+    print("\n📢 إرسال إشعارات للإدارة...")
+    
+    admins_and_supervisors = User.objects.filter(
+        models.Q(is_superuser=True) | 
+        models.Q(supervisor_profile__is_active=True) |
+        models.Q(manager_profile__is_active=True)
+    ).distinct()
+    
+    for admin in admins_and_supervisors:
+        # الحصول على معرف تليجرام
+        telegram_id = None
+        if hasattr(admin, 'supervisor_profile') and admin.supervisor_profile.phone:
+            telegram_id = admin.supervisor_profile.phone
+        elif hasattr(admin, 'manager_profile') and admin.manager_profile.phone:
+            telegram_id = admin.manager_profile.phone
+        
+        if telegram_id:
+            from .utils import send_telegram_message
+            
+            message = f"""
+🔄 تصفير ساعات العمل الشهرية
+
+📅 الشهر: {current_month}
+🕐 الوقت: {now.strftime('%Y-%m-%d %H:%M')}
+
+📊 الإحصائيات:
+• عدد الموظفين: {total_employees}
+• إجمالي الساعات: {total_hours_before:.1f} ساعة
+• متوسط الساعات: {avg_hours_before:.1f} ساعة/موظف
+
+✅ تم تصفير ساعات جميع الموظفين بنجاح!
+
+💡 ملاحظة:
+- السجلات التاريخية محفوظة في التقارير
+- الموظفون يبدأون من جديد بـ 0 ساعة
+- نظام العدالة يعمل من البداية
+
+شهر جديد سعيد! 🎉
+            """
+            
+            send_telegram_message(telegram_id, message)
+            print(f"  ✅ تم إرسال إشعار إلى: {admin.username}")
+    
+    print("\n" + "="*70)
+    print("✅ اكتملت عملية التصفير الشهرية بنجاح!")
+    print("="*70 + "\n")
+    
+    return {
+        'status': 'success',
+        'month': current_month,
+        'employees_reset': reset_count,
+        'total_hours_before': total_hours_before,
+        'average_hours_before': avg_hours_before
+    }

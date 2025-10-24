@@ -70,6 +70,7 @@ urlpatterns = [
     
     # التقارير
     path('reports/', views.reports_view, name='reports'),
+    path('reports/employee-performance/', views.employee_performance_report, name='employee_performance_report'),
     path('reports/export/excel/', views.export_reports_excel, name='export_reports_excel'),
     path('reports/export/pdf/', views.export_reports_pdf, name='export_reports_pdf'),
     

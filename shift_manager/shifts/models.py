@@ -87,6 +87,41 @@ class Employee(models.Model):
     def __str__(self):
         return self.name
     
+    def save(self, *args, **kwargs):
+        """حفظ الموظف مع معالجة خاصة للحالات التالية:
+        1. موظف جديد (total_work_hours = 0)
+        2. عودة من إجازة (is_on_leave تتغير من True إلى False)
+        """
+        # التحقق من الموظف الجديد
+        is_new = self.pk is None
+        
+        # التحقق من العودة من الإجازة
+        returning_from_leave = False
+        if not is_new and self.pk:
+            try:
+                old_instance = Employee.objects.get(pk=self.pk)
+                # إذا كان في إجازة والآن عاد (True → False)
+                if old_instance.is_on_leave and not self.is_on_leave:
+                    returning_from_leave = True
+            except Employee.DoesNotExist:
+                pass
+        
+        # حفظ أولاً
+        super().save(*args, **kwargs)
+        
+        # معادلة الساعات للموظف الجديد أو العائد من إجازة
+        if is_new and self.total_work_hours == 0.0:
+            print(f"👤 موظف جديد: {self.name} - سيتم معادلة ساعاته مع المتوسط")
+            self.equalize_work_hours_to_average()
+            # حفظ مرة أخرى بعد المعادلة (بدون استدعاء save مرة أخرى)
+            super().save(update_fields=['total_work_hours', 'last_work_datetime', 'consecutive_rest_count'])
+        
+        elif returning_from_leave:
+            print(f"🏖️ {self.name} عاد من الإجازة - سيتم معادلة ساعاته مع المتوسط")
+            self.equalize_work_hours_to_average()
+            # حفظ مرة أخرى بعد المعادلة
+            super().save(update_fields=['total_work_hours', 'last_work_datetime', 'consecutive_rest_count'])
+    
     def get_work_hours_today(self):
         """حساب ساعات العمل اليوم"""
         from django.utils import timezone
@@ -109,6 +144,35 @@ class Employee(models.Model):
             total_hours += settings.rotation_interval_hours
         
         return total_hours
+    
+    def equalize_work_hours_to_average(self):
+        """معادلة ساعات عمل الموظف مع المتوسط الحالي
+        
+        تُستخدم عند:
+        - العودة من الإجازة
+        - إضافة موظف جديد
+        """
+        from django.utils import timezone
+        
+        # حساب متوسط ساعات العمل للموظفين المتاحين (غير المجازين)
+        all_employees = Employee.objects.filter(is_on_leave=False).exclude(id=self.id)
+        
+        if all_employees.count() > 0:
+            total = sum(emp.total_work_hours for emp in all_employees)
+            avg_work_hours = total / all_employees.count()
+            
+            # تحديث ساعات الموظف للمتوسط
+            self.total_work_hours = avg_work_hours
+            self.last_work_datetime = timezone.now()
+            self.consecutive_rest_count = 0
+            
+            print(f"⚖️ تمت معادلة ساعات {self.name} إلى المتوسط: {avg_work_hours:.1f} ساعة")
+        else:
+            # إذا لم يكن هناك موظفين آخرين، نبدأ من الصفر
+            self.total_work_hours = 0.0
+            self.last_work_datetime = None
+            self.consecutive_rest_count = 0
+            print(f"⚖️ {self.name} هو الموظف الأول - البداية من 0 ساعة")
     
     def get_priority_score(self, avg_work_hours=None):
         """حساب نقاط الأولوية (أقل = أولوية أعلى للعمل)
@@ -134,18 +198,14 @@ class Employee(models.Model):
         # الموظف الذي عمل أكثر من المتوسط → نقاط أعلى (أولوية أقل)
         score = self.total_work_hours - avg_work_hours
         
-        # ⭐ إذا لم يعمل الموظف أبداً → أولوية قصوى
-        if self.total_work_hours == 0.0:
-            score -= 1000
-        
         # ⭐ مكافأة للموظفين الذين لم يعملوا مؤخراً
         if self.last_work_datetime:
             hours_since_work = (timezone.now() - self.last_work_datetime).total_seconds() / 3600
-            # كل ساعة راحة = خصم 0.3 نقطة
-            score -= (hours_since_work * 0.3)
+            # كل ساعة راحة = خصم 0.3 نقطة (تقليل التأثير)
+            score -= (hours_since_work * 0.1)  # تم تقليل من 0.3 إلى 0.1
         else:
-            # لم يعمل أبداً → أولوية عالية جداً
-            score -= 500
+            # لم يعمل أبداً → أولوية متوسطة (تم إزالة -500)
+            score -= 10  # مكافأة صغيرة فقط
         
         # ⭐ مكافأة إضافية للموظفين الذين استراحوا عدة مرات متتالية
         # كل مرة راحة = خصم 5 نقاط
@@ -423,3 +483,54 @@ class CustomNotification(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.sent_by.username} ({self.sent_at.strftime('%Y-%m-%d %H:%M')})"
+
+
+class MonthlyWorkHoursReset(models.Model):
+    """سجل تصفير ساعات العمل الشهرية
+    
+    يحفظ معلومات كل عملية تصفير شهرية:
+    - تاريخ التصفير
+    - عدد الموظفين
+    - إجمالي الساعات قبل التصفير
+    - متوسط الساعات قبل التصفير
+    """
+    
+    # التاريخ
+    year = models.IntegerField(verbose_name='السنة')
+    month = models.IntegerField(verbose_name='الشهر')  # 1-12
+    reset_datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='تاريخ التصفير'
+    )
+    
+    # الإحصائيات قبل التصفير
+    total_employees = models.IntegerField(
+        default=0,
+        verbose_name='عدد الموظفين'
+    )
+    total_hours_before_reset = models.FloatField(
+        default=0.0,
+        verbose_name='إجمالي الساعات قبل التصفير'
+    )
+    average_hours_before_reset = models.FloatField(
+        default=0.0,
+        verbose_name='متوسط الساعات قبل التصفير'
+    )
+    
+    class Meta:
+        verbose_name = 'سجل تصفير شهري'
+        verbose_name_plural = 'سجلات التصفير الشهرية'
+        ordering = ['-year', '-month']
+        unique_together = [['year', 'month']]  # تصفير واحد لكل شهر
+    
+    def __str__(self):
+        return f"تصفير {self.year}-{self.month:02d} ({self.total_employees} موظف، {self.total_hours_before_reset:.1f} ساعة)"
+    
+    def get_month_name(self):
+        """الحصول على اسم الشهر بالعربية"""
+        months = {
+            1: 'يناير', 2: 'فبراير', 3: 'مارس', 4: 'أبريل',
+            5: 'مايو', 6: 'يونيو', 7: 'يوليو', 8: 'أغسطس',
+            9: 'سبتمبر', 10: 'أكتوبر', 11: 'نوفمبر', 12: 'ديسمبر'
+        }
+        return months.get(self.month, str(self.month))

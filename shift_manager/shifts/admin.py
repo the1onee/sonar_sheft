@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Employee, Sonar, Shift, WeeklyShiftAssignment, EmployeeAssignment, Supervisor, AssignmentConfirmation, Manager, SystemSettings
+from .models import Employee, Sonar, Shift, WeeklyShiftAssignment, EmployeeAssignment, Supervisor, AssignmentConfirmation, Manager, SystemSettings, MonthlyWorkHoursReset
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
@@ -77,3 +77,23 @@ class SystemSettingsAdmin(admin.ModelAdmin):
         obj.rotation_interval_hours = 3.0  # 🔒 ثابت
         obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+
+@admin.register(MonthlyWorkHoursReset)
+class MonthlyWorkHoursResetAdmin(admin.ModelAdmin):
+    list_display = ('year', 'month', 'get_month_display', 'total_employees', 'total_hours_before_reset', 'average_hours_before_reset', 'reset_datetime')
+    list_filter = ('year', 'month')
+    search_fields = ('year', 'month')
+    readonly_fields = ('year', 'month', 'total_employees', 'total_hours_before_reset', 'average_hours_before_reset', 'reset_datetime')
+    
+    def get_month_display(self, obj):
+        """عرض اسم الشهر بالعربية"""
+        return obj.get_month_name()
+    get_month_display.short_description = 'اسم الشهر'
+    
+    def has_add_permission(self, request):
+        """منع الإضافة اليدوية - يتم التسجيل تلقائياً"""
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        """منع الحذف للحفاظ على السجلات"""
+        return False

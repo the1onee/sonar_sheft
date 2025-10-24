@@ -176,11 +176,16 @@
 <div class="content-wrapper">
     <div class="container">
         <!-- العنوان -->
-        <div class="mb-4">
-            <h2 style="font-weight: 900; color: #1F2937;">
-                <i class="fas fa-chart-line"></i> التقارير والإحصائيات
-            </h2>
-            <p style="color: #6B7280;">تقارير شاملة عن التبديلات والإسنادات</p>
+        <div class="mb-4 d-flex justify-content-between align-items-center">
+            <div>
+                <h2 style="font-weight: 900; color: #1F2937;">
+                    <i class="fas fa-chart-line"></i> التقارير والإحصائيات
+                </h2>
+                <p style="color: #6B7280;">تقارير شاملة عن التبديلات والإسنادات</p>
+            </div>
+            <a href="{% url 'employee_performance_report' %}" class="btn btn-lg" style="background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: white; border: none; padding: 15px 30px; border-radius: 15px; font-weight: 600; box-shadow: 0 5px 20px rgba(79, 70, 229, 0.3); transition: all 0.3s ease;">
+                <i class="fas fa-users-cog"></i> تقرير أداء الموظفين
+            </a>
         </div>
         
         <!-- الإحصائيات الرئيسية -->
@@ -459,6 +464,76 @@
             <div class="alert alert-warning text-center">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
                 <p>لا توجد بيانات ساعات عمل</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- سجلات التصفير الشهرية -->
+        <div class="chart-container" style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);">
+            <div class="chart-title" style="color: #1E40AF;">
+                <i class="fas fa-calendar-alt"></i> سجلات التصفير الشهرية
+                <span class="badge" style="background: #3B82F6; font-size: 0.9rem;">
+                    <i class="fas fa-history"></i> آخر 12 شهر
+                </span>
+            </div>
+            
+            {% if monthly_resets %}
+            <div class="table-responsive">
+                <table class="table table-hover" style="background: white;">
+                    <thead style="background: #3B82F6; color: white;">
+                        <tr>
+                            <th>#</th>
+                            <th>السنة</th>
+                            <th>الشهر</th>
+                            <th>تاريخ التصفير</th>
+                            <th>عدد الموظفين</th>
+                            <th>إجمالي الساعات</th>
+                            <th>متوسط الساعات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reset in monthly_resets %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><strong>{{ reset.year }}</strong></td>
+                            <td>
+                                <span class="badge" style="background: #3B82F6; font-size: 0.95rem; padding: 6px 12px;">
+                                    {{ reset.get_month_name }}
+                                </span>
+                            </td>
+                            <td>
+                                <small>{{ reset.reset_datetime|date:"Y-m-d H:i" }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ reset.total_employees }} موظف</span>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: #10B981; font-size: 1rem; padding: 8px 12px;">
+                                    {{ reset.total_hours_before_reset|floatformat:1 }} ساعة
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: #6366F1; font-size: 1rem; padding: 8px 12px;">
+                                    {{ reset.average_hours_before_reset|floatformat:1 }} ساعة/موظف
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="alert alert-info mt-3" style="background: #EFF6FF; border: 1px solid #DBEAFE; color: #1E40AF;">
+                <i class="fas fa-info-circle"></i>
+                <strong>ملاحظة:</strong> يتم تصفير ساعات العمل تلقائياً في بداية كل شهر (الساعة 00:00 من اليوم الأول).
+                السجلات التاريخية للتبديلات تبقى محفوظة، فقط إجمالي ساعات العمل يُصفّر لجميع الموظفين.
+                هذا يضمن بداية عادلة لكل شهر جديد! 🎉
+            </div>
+            {% else %}
+            <div class="alert alert-warning text-center">
+                <i class="fas fa-calendar-times fa-3x mb-3"></i>
+                <p>لا توجد سجلات تصفير شهرية بعد</p>
+                <small class="text-muted">سيتم تسجيل أول تصفير في بداية الشهر القادم</small>
             </div>
             {% endif %}
         </div>

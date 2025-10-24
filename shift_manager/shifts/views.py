@@ -951,6 +951,10 @@ def reports_view(request):
     # ترتيب حسب ساعات العمل (من الأكثر إلى الأقل)
     employees_work_hours.sort(key=lambda x: x['total_work_hours'], reverse=True)
     
+    # 📅 سجلات التصفير الشهرية
+    from .models import MonthlyWorkHoursReset
+    monthly_resets = MonthlyWorkHoursReset.objects.all().order_by('-year', '-month')[:12]  # آخر 12 شهر
+    
     context = {
         'assignments': assignments[:100],  # حد أقصى 100 سجل للعرض
         'total_count': total_count,
@@ -969,9 +973,246 @@ def reports_view(request):
         # إحصائيات ساعات العمل الجديدة
         'employees_work_hours': employees_work_hours,
         'avg_work_hours': avg_hours,
+        # سجلات التصفير الشهرية
+        'monthly_resets': monthly_resets,
     }
     
     return render(request, 'reports/index.html', context)
+
+
+@login_required
+def employee_performance_report(request):
+    """تقرير أداء الموظفين المفصل مع إمكانية التصدير إلى Excel"""
+    from django.utils import timezone
+    from datetime import datetime, timedelta
+    from django.db.models import Count, Q, Sum
+    
+    # الحصول على الفلاتر
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+    export_excel = request.GET.get('export', '') == 'excel'
+    
+    # جلب جميع الموظفين
+    all_employees = Employee.objects.all().order_by('name')
+    
+    # حساب متوسط ساعات العمل
+    total_hours = sum(emp.total_work_hours for emp in all_employees)
+    avg_hours = total_hours / all_employees.count() if all_employees.count() > 0 else 0.0
+    
+    # بناء تقرير مفصل لكل موظف
+    employees_data = []
+    
+    for emp in all_employees:
+        # التبديلات الأساسية
+        assignments = EmployeeAssignment.objects.filter(employee=emp)
+        
+        # تطبيق فلتر التاريخ
+        if date_from:
+            try:
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
+                assignments = assignments.filter(assigned_at__gte=date_from_obj)
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
+                date_to_obj = date_to_obj + timedelta(days=1)
+                assignments = assignments.filter(assigned_at__lt=date_to_obj)
+            except ValueError:
+                pass
+        
+        # إحصائيات التبديلات
+        total_assignments = assignments.count()
+        confirmed_assignments = assignments.filter(
+            employee_confirmed=True,
+            supervisor_confirmed=True
+        ).count()
+        pending_assignments = assignments.filter(
+            Q(employee_confirmed=False) | Q(supervisor_confirmed=False)
+        ).count()
+        
+        # حساب ساعات العمل من التبديلات الفعلية (المؤكدة)
+        confirmed_work_hours = 0.0
+        for assignment in assignments.filter(employee_confirmed=True, supervisor_confirmed=True):
+            if assignment.work_duration_hours:
+                confirmed_work_hours += assignment.work_duration_hours
+        
+        # معدل التأكيد
+        confirmation_rate = (confirmed_assignments / total_assignments * 100) if total_assignments > 0 else 0.0
+        
+        # الفرق عن المتوسط
+        diff_from_avg = emp.total_work_hours - avg_hours
+        
+        # الحالة
+        if emp.is_on_leave:
+            status = '🏖️ في إجازة'
+            status_class = 'warning'
+        elif diff_from_avg > 5.0:
+            status = '🔻 فوق المتوسط بكثير'
+            status_class = 'danger'
+        elif diff_from_avg > 1.0:
+            status = '🔻 فوق المتوسط'
+            status_class = 'info'
+        elif diff_from_avg < -5.0:
+            status = '🔺 تحت المتوسط بكثير'
+            status_class = 'success'
+        elif diff_from_avg < -1.0:
+            status = '🔺 تحت المتوسط'
+            status_class = 'primary'
+        else:
+            status = '⚖️ متوازن'
+            status_class = 'secondary'
+        
+        employees_data.append({
+            'name': emp.name,
+            'telegram_id': emp.telegram_id or 'غير محدد',
+            'total_work_hours': emp.total_work_hours,
+            'confirmed_work_hours': confirmed_work_hours,
+            'diff_from_avg': diff_from_avg,
+            'total_assignments': total_assignments,
+            'confirmed_assignments': confirmed_assignments,
+            'pending_assignments': pending_assignments,
+            'confirmation_rate': confirmation_rate,
+            'last_work': emp.last_work_datetime,
+            'consecutive_rest': emp.consecutive_rest_count,
+            'is_on_leave': emp.is_on_leave,
+            'status': status,
+            'status_class': status_class,
+            'created_at': emp.created_at,
+        })
+    
+    # ترتيب حسب ساعات العمل (من الأكثر إلى الأقل)
+    employees_data.sort(key=lambda x: x['total_work_hours'], reverse=True)
+    
+    # إذا كان طلب تصدير Excel
+    if export_excel:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from django.http import HttpResponse
+        
+        # إنشاء workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'تقرير أداء الموظفين'
+        
+        # تنسيق العنوان الرئيسي
+        ws.merge_cells('A1:M1')
+        ws['A1'] = 'تقرير أداء الموظفين - نظام إدارة السونار'
+        ws['A1'].font = Font(size=16, bold=True, color='FFFFFF')
+        ws['A1'].fill = PatternFill(start_color='4F46E5', end_color='4F46E5', fill_type='solid')
+        ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 30
+        
+        # معلومات التقرير
+        ws['A2'] = f'تاريخ الإنشاء: {timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")}'
+        ws['A3'] = f'عدد الموظفين: {len(employees_data)}'
+        ws['A4'] = f'متوسط ساعات العمل: {avg_hours:.1f} ساعة'
+        
+        if date_from:
+            ws['A5'] = f'من تاريخ: {date_from}'
+        if date_to:
+            ws['A6'] = f'إلى تاريخ: {date_to}'
+        
+        # رأس الجدول
+        headers = [
+            '#', 'اسم الموظف', 'معرف تليجرام', 'إجمالي ساعات العمل',
+            'ساعات العمل المؤكدة', 'الفرق عن المتوسط', 'عدد التبديلات',
+            'التبديلات المؤكدة', 'التبديلات المعلقة', 'معدل التأكيد %',
+            'آخر عمل', 'مرات الراحة', 'الحالة'
+        ]
+        
+        header_row = 8
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col)
+            cell.value = header
+            cell.font = Font(bold=True, color='FFFFFF', size=12)
+            cell.fill = PatternFill(start_color='3B82F6', end_color='3B82F6', fill_type='solid')
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+        
+        ws.row_dimensions[header_row].height = 25
+        
+        # البيانات
+        for idx, emp_data in enumerate(employees_data, 1):
+            row = header_row + idx
+            
+            ws.cell(row=row, column=1, value=idx)
+            ws.cell(row=row, column=2, value=emp_data['name'])
+            ws.cell(row=row, column=3, value=emp_data['telegram_id'])
+            ws.cell(row=row, column=4, value=f"{emp_data['total_work_hours']:.1f}")
+            ws.cell(row=row, column=5, value=f"{emp_data['confirmed_work_hours']:.1f}")
+            ws.cell(row=row, column=6, value=f"{emp_data['diff_from_avg']:.1f}")
+            ws.cell(row=row, column=7, value=emp_data['total_assignments'])
+            ws.cell(row=row, column=8, value=emp_data['confirmed_assignments'])
+            ws.cell(row=row, column=9, value=emp_data['pending_assignments'])
+            ws.cell(row=row, column=10, value=f"{emp_data['confirmation_rate']:.1f}%")
+            ws.cell(row=row, column=11, value=emp_data['last_work'].strftime('%Y-%m-%d %H:%M') if emp_data['last_work'] else 'لم يعمل بعد')
+            ws.cell(row=row, column=12, value=emp_data['consecutive_rest'])
+            ws.cell(row=row, column=13, value=emp_data['status'])
+            
+            # تلوين الصفوف حسب الحالة
+            fill_color = None
+            if emp_data['is_on_leave']:
+                fill_color = 'FEF3C7'
+            elif emp_data['diff_from_avg'] > 5.0:
+                fill_color = 'FEE2E2'
+            elif emp_data['diff_from_avg'] < -5.0:
+                fill_color = 'D1FAE5'
+            
+            for col in range(1, 14):
+                cell = ws.cell(row=row, column=col)
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                if fill_color:
+                    cell.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
+        
+        # ضبط عرض الأعمدة
+        ws.column_dimensions['A'].width = 5
+        ws.column_dimensions['B'].width = 20
+        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['D'].width = 18
+        ws.column_dimensions['E'].width = 18
+        ws.column_dimensions['F'].width = 18
+        ws.column_dimensions['G'].width = 15
+        ws.column_dimensions['H'].width = 15
+        ws.column_dimensions['I'].width = 15
+        ws.column_dimensions['J'].width = 15
+        ws.column_dimensions['K'].width = 18
+        ws.column_dimensions['L'].width = 12
+        ws.column_dimensions['M'].width = 20
+        
+        # إنشاء الاستجابة
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f'employee_performance_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        wb.save(response)
+        return response
+    
+    # عرض الصفحة العادية
+    context = {
+        'employees_data': employees_data,
+        'avg_hours': avg_hours,
+        'total_employees': len(employees_data),
+        'date_from': date_from,
+        'date_to': date_to,
+        'total_hours': total_hours,
+    }
+    
+    return render(request, 'reports/employee_performance.html', context)
 
 
 # ==================== إعدادات النظام (System Settings) ====================

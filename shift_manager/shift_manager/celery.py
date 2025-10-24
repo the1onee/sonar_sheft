@@ -37,6 +37,11 @@ app.conf.beat_schedule = {
         'task': 'shifts.tasks.check_early_notifications_task',
         'schedule': crontab(minute='*/10'),  # كل 10 دقائق
     },
+    # مهمة تصفير ساعات العمل الشهرية - أول يوم من كل شهر في منتصف الليل
+    'reset-monthly-work-hours': {
+        'task': 'shifts.tasks.reset_monthly_work_hours',
+        'schedule': crontab(minute=0, hour=0, day_of_month=1),  # الساعة 00:00 في اليوم الأول من كل شهر
+    },
 }
 
 app.autodiscover_tasks()
