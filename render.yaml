@@ -1,4 +1,5 @@
 services:
+  # خدمة Django Web Application
   - type: web
     name: shift-manager-web
     env: python
@@ -12,6 +13,60 @@ services:
         value: "False"
       - key: ALLOWED_HOSTS
         value: "*"
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: REDIS_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
+  # خدمة Celery Worker - لتنفيذ المهام في الخلفية
+  - type: worker
+    name: shift-manager-celery-worker
+    env: python
+    region: oregon
+    buildCommand: "pip install -r shift_manager/requirements.txt"
+    startCommand: "cd shift_manager && celery -A shift_manager worker --loglevel=info"
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: REDIS_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
+  # خدمة Celery Beat - للمهام المجدولة (التبديل التلقائي)
+  - type: worker
+    name: shift-manager-celery-beat
+    env: python
+    region: oregon
+    buildCommand: "pip install -r shift_manager/requirements.txt"
+    startCommand: "cd shift_manager && celery -A shift_manager beat --loglevel=info"
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: DEBUG
+        value: "False"
       - key: DB_NAME
         sync: false
       - key: DB_USER
