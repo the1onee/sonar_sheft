@@ -379,18 +379,56 @@ class SystemSettings(models.Model):
         return self.rotation_interval_hours
 
     def get_next_rotation_time(self):
-        """حساب وقت التبديل التالي بناءً على آخر تبديل"""
-        from datetime import timedelta
-
-        # إذا كان هناك آخر تبديل، نحسب بناءً عليه
-        if self.last_rotation_time:
-            next_time = self.last_rotation_time + timedelta(hours=self.get_effective_rotation_hours())
-        else:
-            # إذا لم يتم التبديل بعد، نحسب من الوقت الحالي
-            now = timezone.localtime(timezone.now())
-            next_time = now + timedelta(hours=self.get_effective_rotation_hours())
-
-        return next_time
+        """حساب وقت التبديل التالي بناءً على الوقت الحالي والنظام الذكي
+        
+        النظام يعمل كالتالي:
+        1. أوقات نهاية الشفتات (أولوية قصوى): 7:00، 15:00، 23:00
+        2. أوقات التبديل الدورية كل 3 ساعات من بداية كل شفت:
+           - الصباحي: 7:00، 10:00، 13:00
+           - المسائي: 15:00، 18:00، 21:00
+           - الليلي: 23:00، 2:00، 5:00
+        """
+        from datetime import datetime, timedelta, time
+        
+        now = timezone.localtime(timezone.now())
+        current_time = now.time()
+        
+        # أوقات التبديل المحتملة في اليوم (24 ساعة)
+        # نهايات الشفتات + كل 3 ساعات من بداية كل شفت
+        rotation_times = [
+            time(7, 0),   # نهاية ليلي / بداية صباحي
+            time(10, 0),  # تبديل دوري صباحي
+            time(13, 0),  # تبديل دوري صباحي
+            time(15, 0),  # نهاية صباحي / بداية مسائي
+            time(18, 0),  # تبديل دوري مسائي
+            time(21, 0),  # تبديل دوري مسائي
+            time(23, 0),  # نهاية مسائي / بداية ليلي
+            time(2, 0),   # تبديل دوري ليلي
+            time(5, 0),   # تبديل دوري ليلي
+        ]
+        
+        # ترتيب الأوقات
+        rotation_times.sort()
+        
+        # البحث عن الوقت التالي
+        next_rotation_time = None
+        
+        # التحقق من أوقات اليوم الحالي
+        for rotation_time in rotation_times:
+            if current_time < rotation_time:
+                # وجدنا الوقت التالي في نفس اليوم
+                next_rotation_time = datetime.combine(now.date(), rotation_time)
+                break
+        
+        # إذا لم نجد وقت في نفس اليوم، نأخذ أول وقت في اليوم التالي
+        if next_rotation_time is None:
+            tomorrow = now.date() + timedelta(days=1)
+            next_rotation_time = datetime.combine(tomorrow, rotation_times[0])
+        
+        # تحويل إلى timezone-aware
+        next_rotation_time = timezone.make_aware(next_rotation_time, timezone.get_current_timezone())
+        
+        return next_rotation_time
 
     def update_last_rotation_time(self):
         """تحديث وقت آخر تبديل إلى الوقت الحالي"""
