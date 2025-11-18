@@ -16,10 +16,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # 🔑 رمز البوت الخاص بتطبيق تليغرام (Telegram Bot Token)
-BOT_TOKEN = os.getenv(
-    'TELEGRAM_BOT_TOKEN',
-    '7308309352:AAEXhAYReJDDETe3Mkb4B8eCfAdY-k-im2k'
-)
+# ⚠️ يجب إضافة TELEGRAM_BOT_TOKEN في ملف .env
+BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+if not BOT_TOKEN:
+    print("⚠️ تحذير: TELEGRAM_BOT_TOKEN غير موجود في متغيرات البيئة!")
+    print("   الإشعارات عبر Telegram لن تعمل حتى يتم إضافة Token في ملف .env")
 
 
 # 📨 دالة لإرسال رسالة إلى موظف عبر تليغرام
@@ -43,13 +44,7 @@ def send_telegram_message(chat_id, text):
 
 
 def check_and_send_early_notifications():
-    """فحص التبديلات القادمة وإرسال إشعارات مبكرة ومتكررة للأدمن والموظفين
-
-    نظام الإشعارات:
-    - إشعار أولي قبل 30 دقيقة
-    - إشعارات تذكير كل 10 دقائق (عند 20 دقيقة، 10 دقائق)
-    - إشعار نهائي عند وقت التبديل الفعلي
-    """
+    """فحص التبديلات القادمة وإرسال إشعارات مبكرة ومتكررة للأدمن والموظفين."""
     settings = SystemSettings.get_current_settings()
 
     if not settings.is_rotation_active:
@@ -57,44 +52,70 @@ def check_and_send_early_notifications():
         return
 
     now = timezone.localtime(timezone.now())
+    rotation_hours = settings.get_effective_rotation_hours()
+    base_notification_minutes = int(settings.early_notification_minutes or 30)
+    base_notification_minutes = max(base_notification_minutes, 0)
 
-    # الأوقات المطلوبة للإشعارات: 30، 20، 10، 0 دقيقة
-    notification_times = [
-        {'minutes': 30, 'stage': 'initial', 'emoji': '⏰', 'message_prefix': 'إشعار أولي'},
-        {'minutes': 20, 'stage': 'reminder', 'emoji': '⏱️', 'message_prefix': 'تذكير'},
-        {'minutes': 10, 'stage': 'reminder', 'emoji': '⚠️', 'message_prefix': 'تذكير عاجل'},
-        {'minutes': 0, 'stage': 'final', 'emoji': '🔔', 'message_prefix': 'وقت التبديل الآن'}
-    ]
+    def add_stage(container, minutes, stage, emoji, prefix):
+        minutes = int(minutes)
+        if minutes < 0:
+            return
+        if any(item['minutes'] == minutes and item['stage'] == stage for item in container):
+            return
+        container.append({
+            'minutes': minutes,
+            'stage': stage,
+            'emoji': emoji,
+            'message_prefix': prefix
+        })
+
+    notification_times = []
+    add_stage(notification_times, base_notification_minutes, 'initial', '⏰', 'إشعار مبكر')
+    add_stage(notification_times, max(base_notification_minutes - 10, 10), 'reminder', '⏱️', 'تذكير')
+    add_stage(notification_times, max(base_notification_minutes - 20, 5), 'reminder', '⚠️', 'تذكير عاجل')
+    add_stage(notification_times, 0, 'final', '🔔', 'وقت التبديل الآن')
+
+    if not notification_times:
+        print("⚠️ لم يتم تحديد أوقات الإشعارات")
+        return
 
     notifications_sent = 0
+    notifications_window_margin = 2  # دقائق مرونة
 
-    # إرسال إشعارات للأدمن (المشرفين)
     admins_and_supervisors = User.objects.filter(
         models.Q(is_superuser=True) | models.Q(supervisor_profile__is_active=True)
     ).distinct()
 
-    # فحص كل وقت من أوقات الإشعارات
-    for notification_time in notification_times:
-        minutes_before = notification_time['minutes']
-        stage = notification_time['stage']
-        emoji = notification_time['emoji']
-        message_prefix = notification_time['message_prefix']
+    current_assignments = EmployeeAssignment.objects.filter(
+        is_standby=False,
+        assigned_at__lte=now,
+        assigned_at__gte=now - timedelta(hours=rotation_hours * 2)
+    ).select_related('employee', 'sonar', 'shift')
 
-        # نافذة زمنية ± 2 دقيقة لمرونة أكبر
-        window_start = now + timedelta(minutes=minutes_before - 2)
-        window_end = now + timedelta(minutes=minutes_before + 2)
+    if not current_assignments.exists():
+        print("⏰ لا توجد تبديلات قيد التنفيذ لإرسال إشعارات مبكرة")
+        return
 
-        # البحث عن التبديلات في هذه النافذة
-        upcoming_assignments = EmployeeAssignment.objects.filter(
-            assigned_at__gte=window_start,
-            assigned_at__lte=window_end,
-            confirmed=False  # فقط التبديلات غير المؤكدة
-        ).select_related('employee', 'sonar', 'shift')
+    for assignment in current_assignments:
+        if not assignment.sonar:
+            continue
 
-        for assignment in upcoming_assignments:
-            minutes_remaining = int((assignment.assigned_at - now).total_seconds() / 60)
+        work_hours = assignment.work_duration_hours or rotation_hours
+        assignment_end = assignment.assigned_at + timedelta(hours=work_hours)
+        minutes_remaining = int((assignment_end - now).total_seconds() / 60)
 
-            # التحقق من عدم إرسال نفس نوع الإشعار مسبقاً
+        if minutes_remaining < 0:
+            continue
+
+        for notification_time in notification_times:
+            minutes_before = notification_time['minutes']
+            stage = notification_time['stage']
+            emoji = notification_time['emoji']
+            message_prefix = notification_time['message_prefix']
+
+            if not (minutes_before - notifications_window_margin <= minutes_remaining <= minutes_before + notifications_window_margin):
+                continue
+
             admin_notification_exists = EarlyNotification.objects.filter(
                 assignment=assignment,
                 notification_type='admin',
@@ -109,94 +130,77 @@ def check_and_send_early_notifications():
                 minutes_before=minutes_before
             ).exists()
 
-            # إرسال للأدمن
             if not admin_notification_exists:
-                if minutes_remaining >= 0:  # فقط إذا لم يمر الوقت بعد
-                    admin_message = f"""
+                admin_message = f"""
 {emoji} {message_prefix} - تبديل قريب!
 
 👤 الموظف: {assignment.employee.name}
 📡 السونار: {assignment.sonar.name}
 🕐 الشفت: {assignment.shift.get_name_display()}
-⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
+⏰ وقت التبديل: {assignment_end.strftime('%Y-%m-%d %H:%M')}
 ⏳ متبقي: {minutes_remaining} دقيقة
 
-{"🎯 يجب أن يتوجه الموظف للسونار الآن!" if stage == 'final' else "يرجى تأكيد التبديل."}
-                    """
+{"🎯 يجب متابعة تأكيد التبديل الآن!" if stage == 'final' else "يرجى التأكد من جاهزية الموظف للتبديل."}
+                """
 
-                    for admin in admins_and_supervisors:
-                        if hasattr(admin, 'supervisor_profile'):
-                            if admin.supervisor_profile.phone:
-                                send_telegram_message(admin.supervisor_profile.phone, admin_message)
-                        elif admin.is_superuser:
-                            # يمكن إضافة رقم للأدمن في المستقبل
-                            pass
+                for admin in admins_and_supervisors:
+                    if hasattr(admin, 'supervisor_profile') and admin.supervisor_profile.phone:
+                        send_telegram_message(admin.supervisor_profile.phone, admin_message)
+                    elif admin.is_superuser:
+                        pass
 
-                    # حفظ سجل الإشعار
-                    EarlyNotification.objects.create(
-                        assignment=assignment,
-                        notification_type='admin',
-                        notification_stage=stage,
-                        minutes_before=minutes_before
-                    )
-                    notifications_sent += 1
-                    print(
-                        f"  ✅ إشعار أدمن ({message_prefix}): {assignment.employee.name} - متبقي {minutes_remaining} دقيقة")
+                EarlyNotification.objects.create(
+                    assignment=assignment,
+                    notification_type='admin',
+                    notification_stage=stage,
+                    minutes_before=minutes_before
+                )
+                notifications_sent += 1
+                print(f"  ✅ إشعار أدمن ({message_prefix}): {assignment.employee.name} - متبقي {minutes_remaining} دقيقة")
 
-            # إرسال للموظف
-            if not employee_notification_exists and assignment.employee.telegram_id:
-                if minutes_remaining >= 0:  # فقط إذا لم يمر الوقت بعد
-                    # رسالة مخصصة حسب المرحلة
-                    if stage == 'initial':
-                        employee_message = f"""
+            if assignment.employee.telegram_id and not employee_notification_exists:
+                if stage == 'initial':
+                    employee_message = f"""
 {emoji} تنبيه مبكر - تبديل قريب!
 
 مرحباً {assignment.employee.name}،
 
-📡 السونار الجديد: {assignment.sonar.name}
+📡 السونار الحالي: {assignment.sonar.name}
 🕐 الشفت: {assignment.shift.get_name_display()}
-⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
 ⏳ متبقي: {minutes_remaining} دقيقة
 
-يرجى الاستعداد للتوجه إلى موقعك الجديد.
-                        """
-                    elif stage == 'reminder':
-                        employee_message = f"""
-{emoji} تذكير - وقت التبديل يقترب!
+يرجى الاستعداد للتبديل القادم.
+                    """
+                elif stage == 'reminder':
+                    employee_message = f"""
+{emoji} تذكير - تبقى {minutes_remaining} دقيقة!
 
 {assignment.employee.name}،
 
 📡 السونار: {assignment.sonar.name}
-⏰ وقت التبديل: {assignment.assigned_at.strftime('%H:%M')}
-⏳ متبقي: {minutes_remaining} دقيقة فقط!
-
-⚡ ابدأ بالتحضير للانتقال الآن!
-                        """
-                    else:  # final
-                        employee_message = f"""
+⚡ ابدأ بالتحضير الآن!
+                    """
+                else:
+                    employee_message = f"""
 {emoji} وقت التبديل الآن!
 
 {assignment.employee.name}،
 
-🎯 توجه فوراً إلى:
-📡 السونار: {assignment.sonar.name}
+🎯 سيتم تبديلك حالاً، يرجى إكمال الترتيبات النهائية.
+📡 السونار الحالي: {assignment.sonar.name}
 🕐 الشفت: {assignment.shift.get_name_display()}
+                    """
 
-⏰ الوقت المحدد: الآن!
-                        """
+                send_telegram_message(assignment.employee.telegram_id, employee_message)
 
-                    send_telegram_message(assignment.employee.telegram_id, employee_message)
-
-                    # حفظ سجل الإشعار
-                    EarlyNotification.objects.create(
-                        assignment=assignment,
-                        notification_type='employee',
-                        notification_stage=stage,
-                        minutes_before=minutes_before
-                    )
-                    notifications_sent += 1
-                    print(
-                        f"  ✅ إشعار موظف ({message_prefix}): {assignment.employee.name} - متبقي {minutes_remaining} دقيقة")
+                EarlyNotification.objects.create(
+                    assignment=assignment,
+                    notification_type='employee',
+                    notification_stage=stage,
+                    minutes_before=minutes_before
+                )
+                notifications_sent += 1
+                print(f"  ✅ إشعار موظف ({message_prefix}): {assignment.employee.name} - متبقي {minutes_remaining} دقيقة")
 
     if notifications_sent > 0:
         print(f"📢 تم إرسال {notifications_sent} إشعار بنجاح")
@@ -394,7 +398,6 @@ def rotate_within_shift(shift_name, rotation_hours=None):
         msg = (
             f"📢 تم تعيينك في السونار الجديد: {sonar.name}\n"
             f"🕒 الشفت: {shift.name}\n"
-            f"⏰ من {current_rotation_start.strftime('%H:%M')} إلى {current_rotation_end.strftime('%H:%M')}\n"
             f"📊 إجمالي ساعات عملك: {emp.total_work_hours:.1f} ساعة"
         )
         send_telegram_message(emp.telegram_id, msg)
@@ -404,7 +407,6 @@ def rotate_within_shift(shift_name, rotation_hours=None):
         msg = (
             f"💤 أنت في حالة احتياط (راحة) للفترة الحالية\n"
             f"🕒 الشفت: {shift.name}\n"
-            f"⏰ من {current_rotation_start.strftime('%H:%M')} إلى {current_rotation_end.strftime('%H:%M')}\n"
             f"📊 إجمالي ساعات عملك: {emp.total_work_hours:.1f} ساعة\n"
             f"🔄 مرات الراحة المتتالية: {emp.consecutive_rest_count}\n\n"
             f"✨ سيتم إعطاؤك الأولوية في التبديل القادم!"

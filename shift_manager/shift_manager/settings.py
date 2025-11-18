@@ -24,13 +24,24 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("❌ SECRET_KEY غير موجود في متغيرات البيئة! يجب إضافته في ملف .env")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# قراءة DEBUG من متغير البيئة، افتراضياً False للإنتاج
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-# المضيفات المسموح بها
-ALLOWED_HOSTS = ['*', '127.0.0.1', 'localhost']
+# المضيفات المسموح بها - قراءة من متغير البيئة
+ALLOWED_HOSTS_STR = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STR.split(',') if host.strip()]
+
+# في حالة التطوير، إضافة localhost تلقائياً
+if DEBUG:
+    if 'localhost' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('localhost')
+    if '127.0.0.1' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('127.0.0.1')
 
 
 
