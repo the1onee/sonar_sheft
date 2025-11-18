@@ -1,14 +1,14 @@
-Django>=5.2.7
-celery>=5.3.0
-redis>=5.0.0
-requests>=2.31.0
-python-telegram-bot>=20.0
-openpyxl>=3.1.0
-reportlab>=4.0.0
-arabic-reshaper>=3.0.0
-python-bidi>=0.4.2
-psycopg2-binary>=2.9.9
-python-dotenv>=1.0.0
-gunicorn>=21.2.0
-whitenoise>=6.6.0
+Django==5.2.7
+celery==5.3.6
+redis==5.0.1
+requests==2.32.3
+python-telegram-bot==20.7
+openpyxl==3.1.2
+reportlab==4.1.0
+arabic-reshaper==3.0.0
+python-bidi==0.4.2
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+gunicorn==21.2.0
+whitenoise==6.6.0
 
