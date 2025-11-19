@@ -104,7 +104,7 @@ def check_and_send_early_notifications():
             admin_message = (
                 "🔔 وقت التبديل الرسمي الآن!\n\n"
                 f"👤 الموظف: {assignment.employee.name}\n"
-                f"📡 السونار: {assignment.sonar.name}\n"
+                f"📡 السونار: {assignment.sonar.name if assignment.sonar else 'بدون سونار (احتياط)'}\n"
                 f"🕒 الفترة الرسمية: {period_label}\n"
                 f"⏳ تم تجهيز التبديل قبل {lead_minutes} دقيقة - هذا تذكير نهائي للمتابعة."
             )
@@ -128,7 +128,7 @@ def check_and_send_early_notifications():
             employee_message = (
                 "🔔 حان وقت التبديل الرسمي الآن!\n\n"
                 f"{assignment.employee.name}،\n\n"
-                f"📡 السونار: {assignment.sonar.name}\n"
+                f"📡 السونار: {assignment.sonar.name if assignment.sonar else 'بدون سونار (احتياط)'}\n"
                 f"🕒 الفترة الرسمية: {period_label}\n\n"
                 "✅ تم تجهيزك مسبقاً لتعرف مكانك. يرجى التوجه الآن والبدء في التبديل."
             )
