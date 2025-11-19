@@ -425,8 +425,9 @@ def cancel_expired_confirmations():
             # تم إرسال الإشعار مسبقاً، تخطي
             continue
 
+        sonar_name = assignment.sonar.name if assignment.sonar else "بدون سونار (احتياط)"
         print(
-            f"⚠️ تبديل غير مؤكد: {assignment.employee.name} → {assignment.sonar.name} (مر عليه {hours_passed:.1f} ساعة)")
+            f"⚠️ تبديل غير مؤكد: {assignment.employee.name} → {sonar_name} (مر عليه {hours_passed:.1f} ساعة)")
 
         # إرسال إشعار للمشرفين فقط (بدون رفض تلقائي)
         supervisors = User.objects.filter(
@@ -435,11 +436,12 @@ def cancel_expired_confirmations():
 
         for supervisor in supervisors:
             if hasattr(supervisor, 'supervisor_profile') and supervisor.supervisor_profile.phone:
+                supervisor_sonar_name = assignment.sonar.name if assignment.sonar else "بدون سونار (احتياط)"
                 supervisor_message = f"""
 ⚠️ تحذير: موظف لم يؤكد التبديل
 
 👤 الموظف: {assignment.employee.name}
-📡 السونار: {assignment.sonar.name}
+📡 السونار: {supervisor_sonar_name}
 🕐 الشفت: {assignment.shift.get_name_display()}
 ⏰ وقت التبديل: {assignment.assigned_at.strftime('%Y-%m-%d %H:%M')}
 ⏳ مر عليه: {int(hours_passed)} ساعة
