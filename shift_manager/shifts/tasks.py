@@ -21,7 +21,10 @@ def rotate_shifts_task(rotation_hours=None):
     from datetime import timedelta, datetime
     now = timezone.now()
     now_local = timezone.localtime(now)
-    current_time = now_local.time()
+    lead_minutes = max(int(settings.early_notification_minutes or 30), 0)
+    lead_delta = timedelta(minutes=lead_minutes)
+    effective_now_local = now_local + lead_delta
+    current_time = effective_now_local.time()
     
     # تعريف أوقات نهاية الشفتات
     shift_end_times = {
@@ -69,8 +72,8 @@ def rotate_shifts_task(rotation_hours=None):
     
     for shift_name, end_time in shift_end_times.items():
         # حساب الفرق بالدقائق من وقت نهاية الشيفت
-        current_datetime = datetime.combine(now_local.date(), current_time)
-        end_datetime = datetime.combine(now_local.date(), end_time)
+        current_datetime = datetime.combine(effective_now_local.date(), current_time)
+        end_datetime = datetime.combine(effective_now_local.date(), end_time)
         
         # معالجة حالة منتصف الليل
         if end_time.hour < 12 and current_time.hour >= 12:
@@ -94,7 +97,7 @@ def rotate_shifts_task(rotation_hours=None):
             
             # تنفيذ التبديل فوراً عند نهاية الشيفت
             try:
-                rotate_within_shift(current_shift_name, rotation_hours)
+                rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=lead_minutes)
                 settings.update_last_rotation_time()
                 print(f"✅ تبديل نهاية الشيفت: {shift_labels.get(shift_name)} → الشيفت التالي")
                 return
@@ -113,7 +116,7 @@ def rotate_shifts_task(rotation_hours=None):
             print(f"⏱️ مر {hours_since:.1f} ساعة من آخر تبديل (المطلوب: {rotation_hours} ساعة)")
             
             try:
-                rotate_within_shift(current_shift_name, rotation_hours)
+                rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=lead_minutes)
                 settings.update_last_rotation_time()
                 print(f"✅ تبديل دوري: كل {rotation_hours} ساعة في شفت {shift_labels.get(current_shift_name)}")
                 return
@@ -129,7 +132,7 @@ def rotate_shifts_task(rotation_hours=None):
         # أول مرة يتم تشغيل النظام - نبدأ التبديل الآن
         print(f"🆕 أول تبديل في النظام - بدء التبديل في شفت {shift_labels.get(current_shift_name)}")
         try:
-            rotate_within_shift(current_shift_name, rotation_hours)
+            rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=lead_minutes)
             settings.update_last_rotation_time()
             print(f"✅ تم التبديل الأولي بنجاح")
         except Exception as e:
