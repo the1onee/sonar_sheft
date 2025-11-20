@@ -149,12 +149,22 @@ def check_and_send_early_notifications():
     else:
         print("⏰ لا توجد تبديلات تحتاج إشعاراً نهائياً ضمن النافذة الحالية")
 # 🔁 دالة تدوير الموظفين داخل الشفت (أي تبديل مواقعهم أو السونارات)
-def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
+def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, next_rotation_time=None, is_early_notification=False):
     """
     تقوم هذه الدالة بتوزيع الموظفين على السونارات بشكل ذكي حسب سعة كل سونار
     مع إمكانية تجهيز التبديل قبل الوقت الرسمي بدقائق محددة.
+    
+    Args:
+        shift_name: اسم الشفت
+        rotation_hours: فترة التبديل بالساعات
+        lead_time_minutes: دقائق التجهيز المبكر (للإشعار فقط)
+        next_rotation_time: وقت التبديل القادم الفعلي (إذا لم يُحدد، يُحسب من بداية الشفت)
+        is_early_notification: إذا كان True، يتم إرسال الإشعار فقط دون تحديث last_rotation_time
     """
-    print(f"🔁 بدء تدوير الشفت: {shift_name} (تجهيز مبكر: {lead_time_minutes} دقيقة)")
+    if is_early_notification:
+        print(f"📢 إرسال إشعار مبكر للشفت: {shift_name} (قبل {lead_time_minutes} دقيقة)")
+    else:
+        print(f"🔁 بدء تدوير الشفت: {shift_name} (تجهيز مبكر: {lead_time_minutes} دقيقة)")
 
     # الحصول على إعدادات النظام
     settings = SystemSettings.get_current_settings()
@@ -172,12 +182,9 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
     if rejected_count > 0:
         print(f"❌ تم رفض {rejected_count} تبديل غير مؤكد من الفترة السابقة\n")
 
-    # استخدام الوقت المحلي (Asia/Baghdad) مع مراعاة التجهيز المبكر
-    lead_time_minutes = max(lead_time_minutes or 0, 0)
-    lead_time_delta = timedelta(minutes=lead_time_minutes)
+    # استخدام الوقت المحلي (Asia/Baghdad)
     now_actual = timezone.localtime(timezone.now())
-    now = now_actual + lead_time_delta
-
+    
     # 🕒 الحصول على الشفت الحالي من قاعدة البيانات
     try:
         shift = Shift.objects.get(name__iexact=shift_name.strip())
@@ -185,13 +192,31 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
         print(f"❌ الشفت {shift_name} غير موجود")
         return
 
+    # حساب وقت التبديل القادم
+    if next_rotation_time is None:
+        # إذا لم يُحدد وقت التبديل، نحسبه من بداية الشفت
+        shift_start = now_actual.replace(hour=shift.start_hour, minute=0, second=0, microsecond=0)
+        if shift.end_hour <= shift.start_hour and now_actual.hour < shift.start_hour:
+            # شفت ليلي - قد يكون shift_start في اليوم السابق
+            shift_start -= timedelta(days=1)
+        
+        hours_since_start = (now_actual - shift_start).total_seconds() / 3600
+        rotation_index = int(hours_since_start // rotation_hours)
+        current_rotation_start = shift_start + timedelta(hours=rotation_index * rotation_hours)
+    else:
+        # استخدام وقت التبديل المحدد
+        current_rotation_start = timezone.localtime(next_rotation_time)
+        print(f"⏰ استخدام وقت التبديل المحدد: {current_rotation_start.strftime('%H:%M')}")
+
     # تحديد بداية ونهاية الشفت بالساعة
-    shift_start = now.replace(hour=shift.start_hour, minute=0, second=0, microsecond=0)
-    shift_end = now.replace(hour=shift.end_hour, minute=0, second=0, microsecond=0)
+    shift_start = current_rotation_start.replace(hour=shift.start_hour, minute=0, second=0, microsecond=0)
+    shift_end = current_rotation_start.replace(hour=shift.end_hour, minute=0, second=0, microsecond=0)
 
     # في حال الشفت الليلي (ينتهي بعد منتصف الليل)
     if shift.end_hour <= shift.start_hour:
         shift_end += timedelta(days=1)
+        if current_rotation_start.hour < shift.start_hour:
+            shift_start -= timedelta(days=1)
 
     # 🔍 جلب جميع السونارات (Sonar) النشطة فقط
     active_sonars = list(Sonar.objects.filter(active=True))
@@ -202,8 +227,8 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
     # 🔎 البحث عن توزيع الأسبوع الحالي للشفت (WeeklyShiftAssignment)
     assignments = WeeklyShiftAssignment.objects.filter(
         shift=shift,
-        week_start_date__lte=now.date(),
-        week_end_date__gte=now.date()
+        week_start_date__lte=current_rotation_start.date(),
+        week_end_date__gte=current_rotation_start.date()
     )
 
     # 🧑‍💼 جمع جميع الموظفين الذين يعملون في هذا الشفت وغير مجازين
@@ -215,12 +240,7 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
         print(f"⚠️ لا يوجد موظفين متاحين للشفت {shift.name}")
         return
 
-    # حساب كم مضى من الساعات منذ بداية الشفت لتحديد المجموعة الحالية
-    hours_since_start = (now - shift_start).total_seconds() / 3600
-    rotation_index = int(hours_since_start // rotation_hours)
-
-    # حساب وقت بداية ونهاية الفترة الحالية للدوران
-    current_rotation_start = shift_start + timedelta(hours=rotation_index * rotation_hours)
+    # حساب وقت نهاية الفترة الحالية للدوران
     current_rotation_end = min(current_rotation_start + timedelta(hours=rotation_hours), shift_end)
     display_start_str = current_rotation_start.strftime('%H:%M')
     display_end_str = current_rotation_end.strftime('%H:%M')
@@ -295,22 +315,28 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
             
             emp = working_employees[employee_index]
             
-            # 🧾 حفظ التعيين الجديد في قاعدة البيانات
-            assignment = EmployeeAssignment.objects.create(
+            # 🧾 حفظ التعيين الجديد في قاعدة البيانات (أو استخدام الموجود)
+            assignment, created = EmployeeAssignment.objects.get_or_create(
                 employee=emp,
                 sonar=sonar,
                 shift=shift,
                 assigned_at=current_rotation_start,
-                rotation_number=0,
-                is_standby=False,  # الموظف يعمل
-                work_duration_hours=rotation_hours
+                defaults={
+                    'rotation_number': 0,
+                    'is_standby': False,
+                    'work_duration_hours': rotation_hours
+                }
             )
             
-            # تحديث إحصائيات الموظف
-            emp.total_work_hours += rotation_hours
-            emp.last_work_datetime = current_rotation_start
-            emp.consecutive_rest_count = 0  # إعادة تعيين عداد الراحة
-            emp.save()
+            if not created:
+                print(f"  ℹ️ {emp.name} → {sonar.name} (موجود مسبقاً)")
+            
+            # تحديث إحصائيات الموظف (فقط إذا لم يكن إشعار مبكر)
+            if not is_early_notification:
+                emp.total_work_hours += rotation_hours
+                emp.last_work_datetime = current_rotation_start
+                emp.consecutive_rest_count = 0  # إعادة تعيين عداد الراحة
+                emp.save()
             
             sonar_assignment_count[sonar.id] += 1
             work_assignments.append((emp, sonar))
@@ -323,35 +349,68 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
         print(f"\n📍 المرحلة 2: تسجيل {len(standby_employees)} موظف في حالة احتياط...")
         
         for emp in standby_employees:
-            # 🧾 حفظ التعيين كاحتياط (بدون سونار)
-            assignment = EmployeeAssignment.objects.create(
+            # 🧾 حفظ التعيين كاحتياط (بدون سونار) (أو استخدام الموجود)
+            assignment, created = EmployeeAssignment.objects.get_or_create(
                 employee=emp,
                 sonar=None,  # لا يوجد سونار للاحتياط
                 shift=shift,
                 assigned_at=current_rotation_start,
-                rotation_number=0,
-                is_standby=True,  # الموظف في احتياط
-                work_duration_hours=0.0  # لا يعمل
+                defaults={
+                    'rotation_number': 0,
+                    'is_standby': True,
+                    'work_duration_hours': 0.0
+                }
             )
             
-            # تحديث عداد الراحة المتتالية
-            emp.consecutive_rest_count += 1
-            emp.save()
+            if not created:
+                print(f"  ℹ️ {emp.name} - في حالة احتياط (موجود مسبقاً)")
+            
+            # تحديث عداد الراحة المتتالية (فقط إذا لم يكن إشعار مبكر)
+            if not is_early_notification:
+                emp.consecutive_rest_count += 1
+                emp.save()
             
             standby_assignments.append(emp)
             print(f"  💤 {emp.name} - في حالة احتياط (راحة)")
     
     # 📨 إرسال إشعارات تليغرام للموظفين العاملين
     print("\n📤 إرسال الإشعارات...")
+    now_actual = timezone.localtime(timezone.now())
+    time_until_start = (current_rotation_start - now_actual).total_seconds() / 60
+    
     for emp, sonar in work_assignments:
-        msg = (
-            f"📢 تم تجهيز تبديلك القادم!\n"
-            f"🕒 الفترة الرسمية: {official_window_label}\n"
-            f"📡 السونار: {sonar.name}\n"
-            f"✅ تم إعلامك مبكراً لتعرف وجهتك قبل نصف ساعة.\n\n"
-            f"📊 إجمالي ساعات عملك: {emp.total_work_hours:.1f} ساعة"
-        )
-        send_telegram_message(emp.telegram_id, msg)
+        # البحث عن assignment لهذا الموظف
+        assignment = EmployeeAssignment.objects.filter(
+            employee=emp,
+            sonar=sonar,
+            assigned_at=current_rotation_start,
+            shift=shift
+        ).first()
+        
+        if is_early_notification and lead_time_minutes > 0 and time_until_start > 0:
+            # إشعار مبكر قبل وقت التبديل
+            # استخدام total_work_hours الحالي (قبل إضافة rotation_hours)
+            current_work_hours = emp.total_work_hours
+            msg = (
+                f"📢 تم تجهيز تبديلك القادم!\n\n"
+                f"🕒 الفترة الرسمية: {official_window_label}\n"
+                f"📡 السونار: {sonar.name}\n"
+                f"✅ تم إعلامك مبكراً لتعرف وجهتك قبل {int(time_until_start)} دقيقة.\n\n"
+                f"📊 إجمالي ساعات عملك: {current_work_hours:.1f} ساعة"
+            )
+            send_telegram_message(emp.telegram_id, msg)
+            
+            # حفظ سجل الإشعار المبكر
+            if assignment:
+                EarlyNotification.objects.get_or_create(
+                    assignment=assignment,
+                    notification_type='employee',
+                    notification_stage='early',
+                    defaults={'minutes_before': int(time_until_start)}
+                )
+        elif not is_early_notification:
+            # إشعار في وقت التبديل الفعلي (يتم إرساله من check_and_send_early_notifications)
+            pass
     
     # 📨 إرسال إشعارات للموظفين في الاحتياط
     for emp in standby_assignments:
@@ -369,9 +428,12 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0):
     print(f"💤 تم تسجيل {len(standby_assignments)} موظف في حالة احتياط")
     print(f"⏰ الفترة الرسمية: {official_window_label}")
     
-    # 🕐 تحديث وقت آخر تبديل في الإعدادات
-    settings.update_last_rotation_time()
-    print(f"🕐 تم تحديث آخر وقت تبديل: {timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M')}")
+    # 🕐 تحديث وقت آخر تبديل في الإعدادات (فقط إذا لم يكن إشعار مبكر)
+    if not is_early_notification:
+        settings.update_last_rotation_time()
+        print(f"🕐 تم تحديث آخر وقت تبديل: {timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M')}")
+    else:
+        print(f"📢 تم إرسال الإشعار المبكر فقط (لم يتم تحديث last_rotation_time)")
     
     # 📊 عرض ملخص التوزيع المفصل
     print("\n📊 ملخص التوزيع:")

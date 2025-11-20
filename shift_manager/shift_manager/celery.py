@@ -27,15 +27,15 @@ app.conf.enable_utc = True
 
 # الجدولة الأساسية لـ Celery Beat
 app.conf.beat_schedule = {
-    # مهمة التبديل التلقائي - تعمل كل 10 دقائق
+    # مهمة التبديل التلقائي - تعمل في بداية كل 10 دقائق (00, 10, 20, 30, 40, 50)
     'rotate-shifts-dynamic': {
         'task': 'shifts.tasks.rotate_shifts_task',
-        'schedule': crontab(minute='*/10'),  # كل 10 دقائق
+        'schedule': crontab(minute='0,10,20,30,40,50'),  # بداية كل 10 دقائق
     },
-    # مهمة فحص الإشعارات المبكرة - كل 10 دقائق
+    # مهمة فحص الإشعارات المبكرة - في بداية كل 10 دقائق (00, 10, 20, 30, 40, 50)
     'check-early-notifications': {
         'task': 'shifts.tasks.check_early_notifications_task',
-        'schedule': crontab(minute='*/10'),  # كل 10 دقائق
+        'schedule': crontab(minute='0,10,20,30,40,50'),  # بداية كل 10 دقائق
     },
     # مهمة تصفير ساعات العمل الشهرية - أول يوم من كل شهر في منتصف الليل
     'reset-monthly-work-hours': {

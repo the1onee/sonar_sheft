@@ -1289,7 +1289,7 @@ def update_celery_schedule():
     base_schedule = {
         'check-early-notifications': {
             'task': 'shifts.tasks.check_early_notifications_task',
-            'schedule': crontab(minute='*/2'),  # كل 2 دقيقة
+            'schedule': crontab(minute='0,10,20,30,40,50'),  # بداية كل 10 دقائق
         },
     }
     
