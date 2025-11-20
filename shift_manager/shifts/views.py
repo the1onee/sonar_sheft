@@ -1723,7 +1723,14 @@ def export_reports_pdf(request):
     }
     
     for idx, assignment in enumerate(assignments[:100], 1):  # حد أقصى 100 سجل
-        shift_name_ar = shift_name_mapping.get(assignment.shift.name, assignment.shift.name)
+        # التحقق من وجود البيانات الأساسية
+        if not assignment.employee:
+            continue  # تخطي التبديلات بدون موظف
+        
+        # اسم الشفت
+        shift_name_ar = '-'
+        if assignment.shift:
+            shift_name_ar = shift_name_mapping.get(assignment.shift.name, assignment.shift.name)
         
         # الحالة النهائية
         if assignment.supervisor_confirmed:
@@ -1755,12 +1762,18 @@ def export_reports_pdf(request):
                 assignment.supervisor_confirmed_by.username
             )
         
+        # اسم السونار (قد يكون None للموظفين في الاحتياط)
+        sonar_name = format_arabic('احتياط') if not assignment.sonar else format_arabic(assignment.sonar.name)
+        
+        # اسم الموظف
+        employee_name = format_arabic(assignment.employee.name) if assignment.employee.name else format_arabic('غير محدد')
+        
         row = [
             str(idx),
             timezone.localtime(assignment.assigned_at).strftime('%Y-%m-%d'),
             timezone.localtime(assignment.assigned_at).strftime('%H:%M'),
-            format_arabic(assignment.employee.name),
-            format_arabic(assignment.sonar.name),
+            employee_name,
+            sonar_name,
             format_arabic(shift_name_ar),
             emp_confirm,
             supervisor_name,
