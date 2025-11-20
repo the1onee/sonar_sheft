@@ -1440,13 +1440,19 @@ def export_reports_excel(request):
     # إضافة البيانات
     row += 1
     for idx, assignment in enumerate(assignments, 1):
+        # التحقق من وجود البيانات الأساسية
+        if not assignment.employee:
+            continue  # تخطي التبديلات بدون موظف
+        
         # ترجمة اسم الشفت
         shift_name_mapping = {
             'morning': 'صباحي',
             'evening': 'مسائي',
             'night': 'ليلي'
         }
-        shift_name_ar = shift_name_mapping.get(assignment.shift.name, assignment.shift.name)
+        shift_name_ar = '-'
+        if assignment.shift:
+            shift_name_ar = shift_name_mapping.get(assignment.shift.name, assignment.shift.name)
         
         # وقت تأكيد الموظف
         employee_confirmed_time = ''
@@ -1471,11 +1477,17 @@ def export_reports_excel(request):
         else:
             status = "بانتظار الموظف ⏰"
         
+        # اسم الموظف
+        employee_name = assignment.employee.name if assignment.employee.name else 'غير محدد'
+        
+        # اسم السونار (قد يكون None للموظفين في الاحتياط)
+        sonar_name = 'احتياط' if not assignment.sonar else assignment.sonar.name
+        
         # كتابة البيانات
         data = [
             idx,
-            assignment.employee.name,
-            assignment.sonar.name,
+            employee_name,
+            sonar_name,
             shift_name_ar,
             timezone.localtime(assignment.assigned_at).strftime('%Y-%m-%d'),
             timezone.localtime(assignment.assigned_at).strftime('%H:%M'),
