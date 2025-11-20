@@ -307,6 +307,24 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
     # 🎯 المرحلة الأولى: توزيع الموظفين العاملين على السونارات
     print("\n📍 المرحلة 1: توزيع الموظفين على السونارات حسب الأولوية...")
     
+    # 🔍 جلب السونارات السابقة للموظفين (التبديل السابق فقط) لتجنب التكرار
+    employee_last_sonars = {}
+    if not is_early_notification:
+        # حساب وقت التبديل السابق
+        previous_rotation_time = current_rotation_start - timedelta(hours=rotation_hours)
+        
+        for emp in working_employees:
+            # البحث عن التبديل السابق للموظف في نفس الشفت
+            previous_assignment = EmployeeAssignment.objects.filter(
+                employee=emp,
+                shift=shift,
+                assigned_at=previous_rotation_time,
+                is_standby=False
+            ).select_related('sonar').first()
+            
+            if previous_assignment and previous_assignment.sonar:
+                employee_last_sonars[emp.id] = previous_assignment.sonar.id
+    
     employee_index = 0
     for sonar in shuffled_sonars:
         for slot in range(sonar.max_employees):
@@ -314,6 +332,25 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
                 break
             
             emp = working_employees[employee_index]
+            
+            # 🔒 التحقق: تجنب نفس السونار من التبديل السابق (فقط في التبديلين المتتاليين)
+            if emp.id in employee_last_sonars and employee_last_sonars[emp.id] == sonar.id:
+                # نفس السونار - نبحث عن موظف بديل من نفس قائمة العاملين
+                found_alternative = False
+                for alt_index in range(employee_index + 1, len(working_employees)):
+                    alt_emp = working_employees[alt_index]
+                    # التحقق إذا كان الموظف البديل ليس في نفس السونار السابق
+                    if alt_emp.id not in employee_last_sonars or employee_last_sonars[alt_emp.id] != sonar.id:
+                        # استبدال الموظفين في القائمة (لا يؤثر على الأولوية أو الساعات)
+                        working_employees[employee_index], working_employees[alt_index] = working_employees[alt_index], working_employees[employee_index]
+                        emp = working_employees[employee_index]
+                        found_alternative = True
+                        print(f"  🔄 تم استبدال {emp.name} لتجنب تكرار السونار {sonar.name}")
+                        break
+                
+                # إذا لم نجد بديل، نترك الموظف في نفس السونار (نادر الحدوث)
+                if not found_alternative:
+                    print(f"  ⚠️ {emp.name} سيُوضع في {sonar.name} مرة أخرى (لا يوجد بديل متاح)")
             
             # 🧾 حفظ التعيين الجديد في قاعدة البيانات (أو استخدام الموجود)
             assignment, created = EmployeeAssignment.objects.get_or_create(
