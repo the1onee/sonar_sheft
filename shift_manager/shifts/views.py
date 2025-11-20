@@ -1451,7 +1451,7 @@ def export_reports_excel(request):
             'night': 'ليلي'
         }
         shift_name_ar = '-'
-        if assignment.shift:
+        if assignment.shift and assignment.shift.name:
             shift_name_ar = shift_name_mapping.get(assignment.shift.name, assignment.shift.name)
         
         # وقت تأكيد الموظف
