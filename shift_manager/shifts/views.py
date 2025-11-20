@@ -1481,7 +1481,9 @@ def export_reports_excel(request):
         employee_name = assignment.employee.name if assignment.employee.name else 'غير محدد'
         
         # اسم السونار (قد يكون None للموظفين في الاحتياط)
-        sonar_name = 'احتياط' if not assignment.sonar else assignment.sonar.name
+        sonar_name = 'احتياط'
+        if assignment.sonar and assignment.sonar.name:
+            sonar_name = assignment.sonar.name
         
         # كتابة البيانات
         data = [
