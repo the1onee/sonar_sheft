@@ -360,14 +360,18 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
     # تحديد بداية ونهاية الشفت بالساعة
     shift_start = current_rotation_start.replace(hour=shift.start_hour, minute=0, second=0, microsecond=0)
     shift_end = current_rotation_start.replace(hour=shift.end_hour, minute=0, second=0, microsecond=0)
-    official_window_end = official_rotation_start + timedelta(hours=rotation_hours)
-    official_window_label = f"{official_rotation_start.strftime('%H:%M')} → {official_window_end.strftime('%H:%M')}"
 
     # في حال الشفت الليلي (ينتهي بعد منتصف الليل)
     if shift.end_hour <= shift.start_hour:
         shift_end += timedelta(days=1)
         if current_rotation_start.hour < shift.start_hour:
             shift_start -= timedelta(days=1)
+    
+    # حساب نهاية الفترة الرسمية (لا تتجاوز نهاية الشفت)
+    calculated_window_end = official_rotation_start + timedelta(hours=rotation_hours)
+    # استخدام نهاية الشفت كحد أقصى للفترة الرسمية
+    official_window_end = min(calculated_window_end, shift_end)
+    official_window_label = f"{official_rotation_start.strftime('%H:%M')} → {official_window_end.strftime('%H:%M')}"
 
     # 🔍 جلب جميع السونارات (Sonar) النشطة فقط
     active_sonars = list(Sonar.objects.filter(active=True))
