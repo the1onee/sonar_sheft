@@ -26,17 +26,15 @@ app.conf.timezone = 'Asia/Baghdad'
 app.conf.enable_utc = True
 
 # الجدولة الأساسية لـ Celery Beat
+# ملاحظة: يتم تحديث هذه الجدولة ديناميكياً من خلال update_celery_schedule() في views.py
+# الجدولة الافتراضية (يتم تحديثها عند تغيير الإعدادات)
 app.conf.beat_schedule = {
-    # مهمة التبديل التلقائي - تعمل في بداية كل 10 دقائق (00, 10, 20, 30, 40, 50)
-    'rotate-shifts-dynamic': {
-        'task': 'shifts.tasks.rotate_shifts_task',
-        'schedule': crontab(minute='0,10,20,30,40,50'),  # بداية كل 10 دقائق
-    },
-    # مهمة فحص الإشعارات المبكرة - في بداية كل 10 دقائق (00, 10, 20, 30, 40, 50)
+    # مهمة فحص الإشعارات المبكرة - كل 5 دقائق (افتراضي، يتم تحديثه ديناميكياً)
     'check-early-notifications': {
         'task': 'shifts.tasks.check_early_notifications_task',
-        'schedule': crontab(minute='0,10,20,30,40,50'),  # بداية كل 10 دقائق
+        'schedule': crontab(),  # كل دقيقة مبدئياً (يتم تعديلها ديناميكياً لاحقاً)
     },
+    # مهمة التبديل التلقائي - سيتم إضافتها ديناميكياً من update_celery_schedule()
     # مهمة تصفير ساعات العمل الشهرية - أول يوم من كل شهر في منتصف الليل
     'reset-monthly-work-hours': {
         'task': 'shifts.tasks.reset_monthly_work_hours',
@@ -45,3 +43,10 @@ app.conf.beat_schedule = {
 }
 
 app.autodiscover_tasks()
+
+# تحديث الجدولة بمجرد بدء Celery (لتفادي الاعتماد على لوحة الإعدادات فقط)
+try:
+    from shifts.views import update_celery_schedule
+    update_celery_schedule()
+except Exception as exc:
+    print(f"⚠️ تعذر تحديث جدولة Celery تلقائياً: {exc}")

@@ -2,13 +2,18 @@
 from celery import shared_task
 from datetime import time
 from django.utils import timezone
-from .models import Shift, Sonar, Employee, EmployeeAssignment
+from .models import Shift, Sonar, Employee, EmployeeAssignment, EarlyNotification
 from .utils import rotate_within_shift, check_and_send_early_notifications
 from .models import SystemSettings
 
 
 @shared_task
 def rotate_shifts_task(rotation_hours=None):
+    """
+    مهمة التبديل التلقائي مع الأولويات التالية:
+    1. الأولوية الأولى: التبديل في نهاية كل شفت (7:00, 15:00, 23:00) مع إشعار قبل 10 دقائق
+    2. الأولوية الثانية: التبديل حسب rotation_interval_hours من آخر تبديل رسمي
+    """
     # الحصول على إعدادات النظام
     settings = SystemSettings.get_current_settings()
     
@@ -21,14 +26,22 @@ def rotate_shifts_task(rotation_hours=None):
     from datetime import timedelta, datetime
     now = timezone.now()
     now_local = timezone.localtime(now)
-    lead_minutes = max(int(settings.early_notification_minutes or 30), 0)
+    lead_minutes = max(int(settings.early_notification_minutes or 10), 0)
     current_time = now_local.time()
+    current_date = now_local.date()
     
     # تعريف أوقات نهاية الشفتات
     shift_end_times = {
         "night": time(7, 0),      # نهاية الليلي - بداية الصباحي
         "morning": time(15, 0),   # نهاية الصباحي - بداية المسائي  
         "evening": time(23, 0),   # نهاية المسائي - بداية الليلي
+    }
+    
+    # خريطة الشفتات التالية
+    next_shift_map = {
+        "morning": "evening",  # بعد الصباحي يأتي المسائي
+        "evening": "night",    # بعد المسائي يأتي الليلي
+        "night": "morning"     # بعد الليلي يأتي الصباحي
     }
     
     # تعريف نطاقات الشفتات حسب الساعة
@@ -61,263 +74,373 @@ def rotate_shifts_task(rotation_hours=None):
         print("❌ لا يوجد شفت نشط حاليا")
         return
     
+    try:
+        current_shift = Shift.objects.get(name__iexact=current_shift_name.strip())
+    except Shift.DoesNotExist:
+        print(f"❌ الشفت {current_shift_name} غير موجود")
+        return
+    
+    current_tz = timezone.get_current_timezone()
+
+    def ensure_aware(dt):
+        """ضمان أن التاريخ/الوقت يحتوي على المنطقة الزمنية المستخدمة."""
+        if timezone.is_aware(dt):
+            return dt
+        return timezone.make_aware(dt, current_tz)
+
+    def calculate_shift_start_datetime(shift_obj):
+        """إرجاع بداية الشفت الحالية لاستخدامها كمرجع للتبديل الدوري."""
+        shift_start = now_local.replace(
+            hour=shift_obj.start_hour,
+            minute=0,
+            second=0,
+            microsecond=0
+        )
+        if shift_obj.end_hour <= shift_obj.start_hour and now_local.hour < shift_obj.start_hour:
+            shift_start -= timedelta(days=1)
+        return shift_start
+
+    shift_start = calculate_shift_start_datetime(current_shift)
+    
     # الحصول على ساعات التبديل من الإعدادات
     rotation_hours = settings.get_effective_rotation_hours()
+    rotation_minutes = rotation_hours * 60
     
-    # حساب وقت التبديل القادم
-    if settings.last_rotation_time:
-        # حساب وقت التبديل القادم بناءً على آخر تبديل + فترة التبديل
-        next_rotation_time = settings.last_rotation_time + timedelta(hours=rotation_hours)
-        next_rotation_time_local = timezone.localtime(next_rotation_time)
+    # ============================================
+    # 🔥 الأولوية الأولى: التبديل في نهاية الشفت
+    # ============================================
+    # إشعار قبل 10 دقائق من نهاية الشفت (6:50, 14:50, 22:50)
+    # التبديل في نهاية الشفت (7:00, 15:00, 23:00) للشفت التالي
+
+    for shift_name, end_time in shift_end_times.items():
+        # حساب وقت نهاية الشفت
+        end_datetime = datetime.combine(current_date, end_time)
+        if end_time.hour < 12 and current_time.hour >= 12:
+            end_datetime += timedelta(days=1)
+        elif end_time.hour >= 12 and current_time.hour < 12:
+            end_datetime -= timedelta(days=1)
+
+        # تحويل إلى وقت واعٍ بالمنطقة الزمنية
+        end_datetime = timezone.make_aware(end_datetime, current_tz)
         
-        # حساب الوقت المتبقي حتى التبديل القادم
-        time_until_next = next_rotation_time - now
-        minutes_until_next = time_until_next.total_seconds() / 60
+        # وقت الإشعار (قبل 10 دقائق من نهاية الشفت)
+        notification_time = end_datetime - timedelta(minutes=10)
         
-        # 🔥 الأولوية الأولى: التحقق إذا كنا في نهاية الشيفت
-        is_shift_end = False
-        shift_to_rotate = None
+        # حساب الفرق بالدقائق
+        time_diff = (end_datetime - now).total_seconds() / 60
+        notification_diff = (notification_time - now).total_seconds() / 60
         
-        for shift_name, end_time in shift_end_times.items():
-            # حساب الفرق بالدقائق من وقت نهاية الشيفت
-            current_datetime = datetime.combine(now_local.date(), current_time)
-            end_datetime = datetime.combine(now_local.date(), end_time)
-            
-            # معالجة حالة منتصف الليل
-            if end_time.hour < 12 and current_time.hour >= 12:
-                end_datetime += timedelta(days=1)
-            elif end_time.hour >= 12 and current_time.hour < 12:
-                current_datetime -= timedelta(days=1)
-            
-            time_diff = (end_datetime - current_datetime).total_seconds() / 60
-            
-            # إذا كنا في آخر 15 دقيقة من الشيفت أو مرت 5 دقائق من بدايته
-            if -5 <= time_diff <= 15:
-                is_shift_end = True
-                shift_to_rotate = shift_name
-                print(f"⏰ نهاية الشيفت! {shift_labels.get(shift_name)} | الوقت المتبقي: {time_diff:.1f} دقيقة | تبديل مباشر")
-                
-                # التحقق من عدم التبديل مرتين في نفس الفترة (كل 15 دقيقة على الأقل)
-                time_since_last = now - settings.last_rotation_time
-                if time_since_last < timedelta(minutes=15):
-                    minutes_since = time_since_last.total_seconds() / 60
-                    print(f"⏸️ تم التبديل مؤخراً ({minutes_since:.1f} دقيقة مضت). تجاهل...")
-                    return
-                
-                # تنفيذ التبديل فوراً عند نهاية الشيفت
-                try:
-                    rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=0, next_rotation_time=now)
-                    settings.update_last_rotation_time()
-                    print(f"✅ تبديل نهاية الشيفت: {shift_labels.get(shift_name)} → الشيفت التالي")
-                    return
-                except Exception as e:
-                    print(f"❌ خطأ في تبديل نهاية الشيفت: {e}")
-                    return
+        # الشفت التالي
+        next_shift_name = next_shift_map.get(shift_name)
         
-        # 🔥 الأولوية الثانية: التحقق إذا حان وقت التبديل (مرت فترة التبديل)
-        required_interval = timedelta(hours=rotation_hours)
-        time_since_last = now - settings.last_rotation_time
-        
-        if time_since_last >= required_interval:
-            # حان وقت التبديل حسب الإعدادات
-            hours_since = time_since_last.total_seconds() / 3600
-            print(f"⏱️ مر {hours_since:.1f} ساعة من آخر تبديل (المطلوب: {rotation_hours} ساعة)")
-            
+        # حالة 1: إرسال إشعار قبل 10 دقائق من نهاية الشفت (نطاق ±2 دقيقة)
+        if -2 <= notification_diff <= 2:
+            # التحقق من عدم إرسال الإشعار مسبقاً
             try:
-                # استخدام وقت التبديل المحسوب (وليس الوقت الحالي)
-                rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=0, next_rotation_time=next_rotation_time)
-                settings.update_last_rotation_time()
-                print(f"✅ تبديل دوري: كل {rotation_hours} ساعة في شفت {shift_labels.get(current_shift_name)}")
-                return
-            except Exception as e:
-                print(f"❌ خطأ في التبديل الدوري: {e}")
-                return
-        else:
-            # 🔔 الأولوية الثالثة: التحقق إذا حان وقت إرسال الإشعار المبكر (قبل 30 دقيقة من التبديل)
-            notification_time = next_rotation_time - timedelta(minutes=lead_minutes)
-            time_until_notification = notification_time - now
-            minutes_until_notification = time_until_notification.total_seconds() / 60
+                next_shift = Shift.objects.get(name__iexact=next_shift_name)
+            except Shift.DoesNotExist:
+                print(f"❌ الشفت {next_shift_name} غير موجود")
+                continue
             
-            # تحديد الشفت المستهدف للإشعار
-            # 🎯 أولوية خاصة: إذا كان الوقت في نطاق 7-15 (صباحي)، نرسل للشفت الحالي
-            # 🎯 لباقي الأوقات: إذا كان قبل 30 دقيقة من نهاية الشفت، نرسل للشفت التالي
-            target_shift_name = current_shift_name
-            target_rotation_time = next_rotation_time
+            # وقت التبديل الرسمي (نهاية الشفت = بداية الشفت التالي)
+            official_rotation_time = end_datetime
             
-            # التحقق إذا كنا قبل 30 دقيقة من نهاية الشفت
-            is_before_shift_end = False
-            next_shift_name = None
+            # التحقق من وجود تبديل مسبق
+            existing_assignment = EmployeeAssignment.objects.filter(
+                assigned_at=official_rotation_time,
+                shift=next_shift
+            ).first()
             
-            # خريطة الشفتات التالية
-            next_shift_map = {
-                "morning": "evening",  # بعد الصباحي يأتي المسائي
-                "evening": "night",    # بعد المسائي يأتي الليلي
-                "night": "morning"     # بعد الليلي يأتي الصباحي
-            }
-            
-            for shift_name, end_time in shift_end_times.items():
-                # حساب الفرق بالدقائق من وقت نهاية الشيفت
-                current_datetime = datetime.combine(now_local.date(), current_time)
-                end_datetime = datetime.combine(now_local.date(), end_time)
+            if existing_assignment:
+                # التحقق من عدم إرسال إشعار مسبقاً
+                recent_notification = EarlyNotification.objects.filter(
+                    assignment=existing_assignment,
+                    notification_type='employee',
+                    notification_stage='initial',
+                    sent_at__gte=now - timedelta(minutes=5)
+                ).exists()
                 
-                # معالجة حالة منتصف الليل
-                if end_time.hour < 12 and current_time.hour >= 12:
-                    end_datetime += timedelta(days=1)
-                elif end_time.hour >= 12 and current_time.hour < 12:
-                    current_datetime -= timedelta(days=1)
-                
-                time_diff = (end_datetime - current_datetime).total_seconds() / 60
-                
-                # إذا كنا قبل 30 دقيقة (±5 دقائق) من نهاية الشفت
-                if 25 <= time_diff <= 35:
-                    is_before_shift_end = True
-                    next_shift_name = next_shift_map.get(shift_name)
-                    
-                    # 🎯 أولوية خاصة لكل شفت: إذا كان الوقت في نطاق الشفت وليس قبل 30 دقيقة من النهاية
-                    # 🎯 لباقي الأوقات أو قبل 30 دقيقة من النهاية: نرسل للشفت التالي
-                    is_in_shift_priority = False
-                    
-                    # التحقق من أولوية الصباحي (7-14:30)
-                    if current_shift_name == "morning" and time(7, 0) <= current_time < time(14, 30):
-                        is_in_shift_priority = True
-                    
-                    # التحقق من أولوية المسائي (15-22:30)
-                    elif current_shift_name == "evening" and time(15, 0) <= current_time < time(22, 30):
-                        is_in_shift_priority = True
-                    
-                    # التحقق من أولوية الليلي (23-6:30)
-                    elif current_shift_name == "night":
-                        # الشفت الليلي يمر منتصف الليل
-                        if current_time >= time(23, 0) or current_time < time(6, 30):
-                            is_in_shift_priority = True
-                    
-                    if is_in_shift_priority:
-                        # في نطاق الشفت (قبل 30 دقيقة من النهاية) - إرسال للشفت الحالي
-                        target_shift_name = current_shift_name
-                        target_rotation_time = next_rotation_time
-                        shift_range_label = ""
-                        if current_shift_name == "morning":
-                            shift_range_label = "7-14:30"
-                        elif current_shift_name == "evening":
-                            shift_range_label = "15-22:30"
-                        elif current_shift_name == "night":
-                            shift_range_label = "23-6:30"
-                        print(f"📢 أولوية خاصة للشفت {shift_labels.get(current_shift_name)} ({shift_range_label}): إرسال إشعار للشفت الحالي ({shift_labels.get(current_shift_name)})")
-                    else:
-                        # لباقي الأوقات أو قبل 30 دقيقة من النهاية: نرسل للشفت التالي
-                        if next_shift_name:
-                            target_shift_name = next_shift_name
-                            # حساب وقت بداية الشفت التالي (نهاية الشفت الحالي = بداية الشفت التالي)
-                            next_shift_start_datetime = end_datetime
-                            
-                            # حساب وقت التبديل في الشفت التالي (بداية الشفت)
-                            target_rotation_time = timezone.make_aware(next_shift_start_datetime)
-                            target_rotation_time_local = timezone.localtime(target_rotation_time)
-                            print(f"📢 قبل 30 دقيقة من نهاية الشفت ({shift_labels.get(shift_name)}): إرسال إشعار للشفت التالي ({shift_labels.get(next_shift_name)}) في {target_rotation_time_local.strftime('%H:%M')}")
-                    break
-            
-            # إذا كان الوقت الحالي في نطاق ±5 دقائق من وقت الإشعار
-            if -5 <= minutes_until_notification <= 5 or is_before_shift_end:
-                # التحقق من عدم إرسال الإشعار مسبقاً
-                from .models import EmployeeAssignment, EarlyNotification
-                existing_assignment = EmployeeAssignment.objects.filter(
-                    assigned_at=target_rotation_time,
-                    shift__name=target_shift_name
-                ).first()
-                
-                if existing_assignment:
-                    # التحقق من وجود إشعار مبكر مسبق
-                    early_notification_exists = EarlyNotification.objects.filter(
-                        assignment=existing_assignment,
-                        notification_type='employee',
-                        notification_stage='early'
-                    ).exists()
-                    
-                    if not early_notification_exists:
-                        print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {timezone.localtime(target_rotation_time).strftime('%H:%M')} للشفت {shift_labels.get(target_shift_name)}")
-                        try:
-                            # إرسال الإشعار قبل 30 دقيقة من وقت التبديل الفعلي (بدون تحديث last_rotation_time)
-                            rotate_within_shift(target_shift_name, rotation_hours, lead_time_minutes=lead_minutes, next_rotation_time=target_rotation_time, is_early_notification=True)
-                            print(f"✅ تم إرسال الإشعار المبكر بنجاح للشفت {shift_labels.get(target_shift_name)}")
-                            return
-                        except Exception as e:
-                            print(f"❌ خطأ في إرسال الإشعار المبكر: {e}")
-                            return
-                    else:
-                        print(f"⏸️ تم إرسال الإشعار المبكر مسبقاً")
-                else:
-                    # إنشاء التبديلات وإرسال الإشعار
-                    print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {timezone.localtime(target_rotation_time).strftime('%H:%M')} للشفت {shift_labels.get(target_shift_name)}")
+                if not recent_notification:
+                    print(f"📢 إشعار نهاية الشفت: قبل 10 دقائق من نهاية {shift_labels.get(shift_name)} → بداية {shift_labels.get(next_shift_name)}")
                     try:
-                        # إرسال الإشعار قبل 30 دقيقة من وقت التبديل الفعلي (بدون تحديث last_rotation_time)
-                        rotate_within_shift(target_shift_name, rotation_hours, lead_time_minutes=lead_minutes, next_rotation_time=target_rotation_time, is_early_notification=True)
-                        print(f"✅ تم إرسال الإشعار المبكر بنجاح للشفت {shift_labels.get(target_shift_name)}")
+                        rotate_within_shift(
+                            next_shift_name, 
+                            rotation_hours, 
+                            lead_time_minutes=10, 
+                            next_rotation_time=official_rotation_time, 
+                            is_early_notification=True
+                        )
+                        print(f"✅ تم إرسال إشعار نهاية الشفت للشفت {shift_labels.get(next_shift_name)}")
                         return
                     except Exception as e:
-                        print(f"❌ خطأ في إرسال الإشعار المبكر: {e}")
+                        print(f"❌ خطأ في إرسال إشعار نهاية الشفت: {e}")
                         return
             else:
-                # لم يحن وقت التبديل أو الإشعار بعد
-                remaining_time = required_interval - time_since_last
-                minutes_remaining = remaining_time.total_seconds() / 60
-                print(f"⏳ لم يحن وقت التبديل بعد | متبقي: {minutes_remaining:.1f} دقيقة | شفت: {shift_labels.get(current_shift_name)}")
-                print(f"   📢 الإشعار سيُرسل في: {timezone.localtime(notification_time).strftime('%H:%M')} (متبقي: {minutes_until_notification:.1f} دقيقة)")
-    else:
-        # أول مرة يتم تشغيل النظام - نحسب التبديل الأول من بداية الشفت
+                # إنشاء التبديلات وإرسال الإشعار
+                print(f"📢 إشعار نهاية الشفت: قبل 10 دقائق من نهاية {shift_labels.get(shift_name)} → بداية {shift_labels.get(next_shift_name)}")
+                try:
+                    rotate_within_shift(
+                        next_shift_name, 
+                        rotation_hours, 
+                        lead_time_minutes=10, 
+                        next_rotation_time=official_rotation_time, 
+                        is_early_notification=True
+                    )
+                    print(f"✅ تم إرسال إشعار نهاية الشفت للشفت {shift_labels.get(next_shift_name)}")
+                    return
+                except Exception as e:
+                    print(f"❌ خطأ في إرسال إشعار نهاية الشفت: {e}")
+                    return
+        
+        # حالة 2: تنفيذ التبديل في نهاية الشفت (نطاق ±2 دقيقة)
+        if -2 <= time_diff <= 2:
+            # التحقق من عدم التبديل مرتين في نفس الفترة
+            if settings.last_rotation_time:
+                time_since_last = now - settings.last_rotation_time
+                if time_since_last < timedelta(minutes=5):
+                    print(f"⏸️ تم التبديل مؤخراً. تجاهل...")
+                    return
+            
+            try:
+                next_shift = Shift.objects.get(name__iexact=next_shift_name)
+            except Shift.DoesNotExist:
+                print(f"❌ الشفت {next_shift_name} غير موجود")
+                continue
+            
+            # وقت التبديل الرسمي (نهاية الشفت = بداية الشفت التالي)
+            official_rotation_time = end_datetime
+            
+            print(f"⏰ نهاية الشفت! {shift_labels.get(shift_name)} → بداية {shift_labels.get(next_shift_name)}")
+            try:
+                # تنفيذ التبديل للشفت التالي
+                rotate_within_shift(
+                    next_shift_name, 
+                    rotation_hours, 
+                    lead_time_minutes=0, 
+                    next_rotation_time=official_rotation_time, 
+                    is_early_notification=False
+                )
+                # تحديث last_rotation_time إلى الوقت الرسمي (نهاية الشفت)
+                settings.last_rotation_time = official_rotation_time
+                settings.save(update_fields=['last_rotation_time'])
+                print(f"✅ تبديل نهاية الشفت: {shift_labels.get(shift_name)} → {shift_labels.get(next_shift_name)}")
+                return
+            except Exception as e:
+                print(f"❌ خطأ في تبديل نهاية الشفت: {e}")
+                return
+    
+    # ============================================
+    # 🔥 الأولوية الثانية: التبديل حسب الإعدادات
+    # ============================================
+    # التبديل حسب rotation_interval_hours من آخر تبديل رسمي
+    
+    if not settings.last_rotation_time:
+        # أول مرة - نحسب التبديل الأول من بداية الشفت
         print(f"🆕 أول تبديل في النظام - حساب التبديل الأول من بداية الشفت {shift_labels.get(current_shift_name)}")
         
-        # الحصول على الشفت الحالي من قاعدة البيانات
-        try:
-            from .models import Shift
-            shift = Shift.objects.get(name__iexact=current_shift_name.strip())
-        except Shift.DoesNotExist:
-            print(f"❌ الشفت {current_shift_name} غير موجود")
-            return
-        
         # حساب وقت التبديل الأول من بداية الشفت
-        shift_start = now_local.replace(hour=shift.start_hour, minute=0, second=0, microsecond=0)
-        if shift.end_hour <= shift.start_hour and now_local.hour < shift.start_hour:
-            # شفت ليلي - قد يكون shift_start في اليوم السابق
-            shift_start -= timedelta(days=1)
+        shift_start = calculate_shift_start_datetime(current_shift)
         
-        # حساب عدد فترات التبديل منذ بداية الشفت
         hours_since_start = (now_local - shift_start).total_seconds() / 3600
         rotation_index = int(hours_since_start // rotation_hours)
         first_rotation_time = shift_start + timedelta(hours=rotation_index * rotation_hours)
         
-        # إذا كان وقت التبديل المحسوب في الماضي، نأخذ التبديل التالي
         if first_rotation_time < now_local:
             first_rotation_time += timedelta(hours=rotation_hours)
         
         first_rotation_time_aware = timezone.make_aware(first_rotation_time)
-        
-        print(f"⏰ وقت التبديل الأول المحسوب: {first_rotation_time.strftime('%H:%M')} (من بداية الشفت {shift.start_hour}:00)")
-        
-        # التحقق إذا كان وقت التبديل في المستقبل
         time_until_first = (first_rotation_time_aware - now).total_seconds() / 60
         
         if time_until_first > 0:
-            # التبديل في المستقبل - ننشئ التبديلات فقط (بدون تحديث last_rotation_time)
-            print(f"⏳ التبديل الأول في المستقبل ({int(time_until_first)} دقيقة) - إنشاء التبديلات فقط")
+            # التبديل في المستقبل - إنشاء التبديلات فقط
+            print(f"⏳ التبديل الأول في المستقبل ({int(time_until_first)} دقيقة)")
             try:
-                # نستخدم is_early_notification=True لتجنب تحديث last_rotation_time
-                rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=0, next_rotation_time=first_rotation_time_aware, is_early_notification=True)
-                # تعيين last_rotation_time إلى وقت قبل التبديل الأول بحيث يحسب التبديل القادم بشكل صحيح
-                # نستخدم وقت قبل التبديل الأول بفترة التبديل
+                rotate_within_shift(
+                    current_shift_name, 
+                    rotation_hours, 
+                    lead_time_minutes=0, 
+                    next_rotation_time=first_rotation_time_aware, 
+                    is_early_notification=True
+                )
                 settings.last_rotation_time = first_rotation_time_aware - timedelta(hours=rotation_hours)
                 settings.save(update_fields=['last_rotation_time'])
-                print(f"✅ تم إنشاء التبديلات للفترة {first_rotation_time.strftime('%H:%M')} - سيحدث التبديل الفعلي عند حلول الوقت")
+                print(f"✅ تم إنشاء التبديلات للفترة {first_rotation_time.strftime('%H:%M')}")
             except Exception as e:
                 print(f"❌ خطأ في إنشاء التبديلات الأولية: {e}")
         else:
-            # التبديل الآن أو في الماضي - ننفذ التبديل فوراً
-            print(f"🔄 التبديل الأول الآن - تنفيذ التبديل فوراً")
+            # التبديل الآن - تنفيذ فوراً
+            print(f"🔄 التبديل الأول الآن")
             try:
-                rotate_within_shift(current_shift_name, rotation_hours, lead_time_minutes=0, next_rotation_time=first_rotation_time_aware)
-                settings.update_last_rotation_time()
-                print(f"✅ تم التبديل الأولي بنجاح - التبديل القادم في {first_rotation_time.strftime('%H:%M')}")
+                rotate_within_shift(
+                    current_shift_name, 
+                    rotation_hours, 
+                    lead_time_minutes=0, 
+                    next_rotation_time=first_rotation_time_aware, 
+                    is_early_notification=False
+                )
+                settings.last_rotation_time = first_rotation_time_aware
+                settings.save(update_fields=['last_rotation_time'])
+                print(f"✅ تم التبديل الأولي بنجاح")
             except Exception as e:
                 print(f"❌ خطأ في التبديل الأولي: {e}")
+        return
+    
+    # =========================
+    # ⛔ أولوية ثانية: منع التبديل الداخلي في آخر 59 دقيقة من الشفت
+    # =========================
+    shift_end_time = shift_end_times[current_shift_name]
+    shift_end_dt = shift_start.replace(
+        hour=shift_end_time.hour,
+        minute=shift_end_time.minute,
+        second=0,
+        microsecond=0
+    )
+    if shift_end_time.hour <= current_shift.start_hour:
+        shift_end_dt += timedelta(days=1)
+    minutes_to_shift_end = (shift_end_dt - now_local).total_seconds() / 60
+    lock_window_minutes = 59
+    if 0 <= minutes_to_shift_end <= lock_window_minutes:
+        print(
+            f"🛑 تم إيقاف التبديل الدوري لأن الشفت ينتهي بعد "
+            f"{int(minutes_to_shift_end)} دقيقة (الأولوية للأولوية الأولى فقط)"
+        )
+        return
+
+    # حساب وقت التبديل القادم من آخر تبديل رسمي
+    required_interval = timedelta(hours=rotation_hours)
+    if required_interval.total_seconds() <= 0:
+        print("❌ فترة التبديل غير صحيحة (<=0)")
+        return
+
+    shift_start_aware = ensure_aware(shift_start)
+    last_rotation_aware = ensure_aware(settings.last_rotation_time)
+    now_local_aware = ensure_aware(now_local)
+
+    interval_seconds = required_interval.total_seconds()
+    elapsed_since_start = max((now_local_aware - shift_start_aware).total_seconds(), 0)
+    slots_elapsed = int(elapsed_since_start // interval_seconds)
+    anchored_last_rotation = shift_start_aware + (required_interval * slots_elapsed)
+    if anchored_last_rotation > now_local_aware:
+        anchored_last_rotation -= required_interval
+
+    alignment_threshold = timedelta(minutes=1)
+    if abs((last_rotation_aware - anchored_last_rotation).total_seconds()) >= alignment_threshold.total_seconds():
+        print(
+            f"🔧 إعادة محاذاة سجل التبديل الدوري إلى {anchored_last_rotation.strftime('%H:%M')} "
+            "لضمان البدء من بداية الشفت"
+        )
+        settings.last_rotation_time = anchored_last_rotation
+        settings.save(update_fields=['last_rotation_time'])
+        last_rotation_aware = anchored_last_rotation
+
+    time_since_last = now - settings.last_rotation_time
+    catchup_rotations = 0
+    max_catchup_rotations = 6  # حماية من عدد كبير من التبديلات المتأخرة
+
+    while time_since_last >= required_interval and catchup_rotations < max_catchup_rotations:
+        next_rotation_time = settings.last_rotation_time + required_interval
+        next_rotation_time_local = timezone.localtime(next_rotation_time)
+        hours_since = time_since_last.total_seconds() / 3600
+        print(
+            f"⏱️ مر {hours_since:.1f} ساعة من آخر تبديل "
+            f"(المطلوب: {rotation_hours} ساعة) - تنفيذ تبديل تعويضي #{catchup_rotations + 1}"
+        )
+        try:
+            rotate_within_shift(
+                current_shift_name,
+                rotation_hours,
+                lead_time_minutes=0,
+                next_rotation_time=next_rotation_time,
+                is_early_notification=False
+            )
+            settings.last_rotation_time = next_rotation_time
+            settings.save(update_fields=['last_rotation_time'])
+            print(f"✅ تبديل دوري (تعويضي) في {next_rotation_time_local.strftime('%H:%M')}")
+            catchup_rotations += 1
+            time_since_last = now - settings.last_rotation_time
+        except Exception as e:
+            print(f"❌ خطأ في التبديل الدوري: {e}")
+            return
+
+    if catchup_rotations > 0:
+        if time_since_last >= required_interval:
+            total_delay_hours = time_since_last.total_seconds() / 3600
+            print(
+                f"⚠️ بقي {total_delay_hours:.1f} ساعة متأخرة بعد {catchup_rotations} تبديلات."
+                " سيُستكمل التعويض في الدورة القادمة."
+            )
+        else:
+            print(f"✅ تمت معالجة كل التبديلات المتأخرة ({catchup_rotations})")
+        return
+
+    next_rotation_time = settings.last_rotation_time + required_interval
+    next_rotation_time_local = timezone.localtime(next_rotation_time)
+    
+    # حساب الوقت المتبقي
+    time_until_next = next_rotation_time - now
+    minutes_until_next = time_until_next.total_seconds() / 60
+    
+    # التحقق إذا حان وقت إرسال الإشعار المبكر
+    notification_time = next_rotation_time - timedelta(minutes=lead_minutes)
+    time_until_notification = notification_time - now
+    minutes_until_notification = time_until_notification.total_seconds() / 60
+    
+    # نطاق الإشعار: ±2 دقيقة
+    notification_window = 2
+    
+    if -notification_window <= minutes_until_notification <= notification_window:
+        # التحقق من عدم إرسال الإشعار مسبقاً
+        existing_assignment = EmployeeAssignment.objects.filter(
+            assigned_at=next_rotation_time,
+            shift__name=current_shift_name
+        ).first()
+        
+        if existing_assignment:
+            recent_notification = EarlyNotification.objects.filter(
+                assignment=existing_assignment,
+                notification_type='employee',
+                notification_stage='initial',
+                sent_at__gte=now - timedelta(minutes=5)
+            ).exists()
+            
+            if not recent_notification:
+                print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {next_rotation_time_local.strftime('%H:%M')}")
+                try:
+                    rotate_within_shift(
+                        current_shift_name, 
+                        rotation_hours, 
+                        lead_time_minutes=lead_minutes, 
+                        next_rotation_time=next_rotation_time, 
+                        is_early_notification=True
+                    )
+                    print(f"✅ تم إرسال الإشعار المبكر بنجاح")
+                    return
+                except Exception as e:
+                    print(f"❌ خطأ في إرسال الإشعار المبكر: {e}")
+                    return
+        else:
+            # إنشاء التبديلات وإرسال الإشعار
+            print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {next_rotation_time_local.strftime('%H:%M')}")
+            try:
+                rotate_within_shift(
+                    current_shift_name, 
+                    rotation_hours, 
+                    lead_time_minutes=lead_minutes, 
+                    next_rotation_time=next_rotation_time, 
+                    is_early_notification=True
+                )
+                print(f"✅ تم إرسال الإشعار المبكر بنجاح")
+                return
+            except Exception as e:
+                print(f"❌ خطأ في إرسال الإشعار المبكر: {e}")
+                return
+    else:
+        # لم يحن وقت التبديل أو الإشعار بعد
+        remaining_time = required_interval - time_since_last
+        minutes_remaining = remaining_time.total_seconds() / 60
+        print(f"⏳ لم يحن وقت التبديل بعد | متبقي: {minutes_remaining:.1f} دقيقة | شفت: {shift_labels.get(current_shift_name)}")
+        if minutes_until_notification > 0:
+            print(f"   📢 الإشعار سيُرسل في: {timezone.localtime(notification_time).strftime('%H:%M')} (متبقي: {minutes_until_notification:.1f} دقيقة)")
 
 
 @shared_task

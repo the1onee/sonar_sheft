@@ -394,23 +394,32 @@ class EmployeeAccountCreateForm(forms.ModelForm):
 class SystemSettingsForm(forms.ModelForm):
     class Meta:
         model = SystemSettings
-        fields = ['early_notification_minutes', 'is_rotation_active']
+        fields = ['rotation_interval_hours', 'early_notification_minutes', 'is_rotation_active']
         widgets = {
+            'rotation_interval_hours': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': 0.1,
+                'max': 24,
+                'step': 0.1,
+                'placeholder': 'مثال: 2.0 = كل ساعتين'
+            }),
             'early_notification_minutes': forms.NumberInput(attrs={
                 'class': 'form-control',
                 'min': 5,
                 'max': 120,
-                'placeholder': 'مثال: 30 = قبل نصف ساعة'
+                'placeholder': 'مثال: 10 = قبل 10 دقائق'
             }),
             'is_rotation_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
+            'rotation_interval_hours': 'فترة التبديل (بالساعات)',
             'early_notification_minutes': 'الإشعار المبكر (بالدقائق)',
             'is_rotation_active': 'تفعيل التبديل التلقائي'
         }
         help_texts = {
+            'rotation_interval_hours': 'فترة التبديل بين الموظفين (بالساعات). مثال: 2.0 = كل ساعتين',
             'early_notification_minutes': 'كم دقيقة قبل التبديل الفعلي يتم إرسال الإشعار للأدمن والموظفين',
-            'is_rotation_active': 'تفعيل أو إيقاف نظام التبديل التلقائي (التبديل سيكون تلقائياً كل 3 ساعات)'
+            'is_rotation_active': 'تفعيل أو إيقاف نظام التبديل التلقائي'
         }
 
 

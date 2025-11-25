@@ -786,10 +786,11 @@ def bulk_confirm_assignments(request):
                     assignment.shift.name, 
                     assignment.shift.name
                 )
+                sonar_name = assignment.sonar.name if assignment.sonar else "بدون سونار (احتياط)"
                 
                 msg = (
                     f"✅ تم تأكيد تبديلك!\n\n"
-                    f"📢 السونار الجديد: {assignment.sonar.name}\n"
+                    f"📡 السونار: {sonar_name}\n"
                     f"🕒 الشفت: {shift_name_ar}\n"
                     f"⏰ الوقت: {timezone.localtime(assignment.assigned_at).strftime('%Y-%m-%d %H:%M')}"
                 )
@@ -1224,11 +1225,33 @@ def settings_view(request):
     settings = SystemSettings.get_current_settings()
     
     if request.method == 'POST':
+        old_next_rotation = settings.get_next_rotation_time()
         form = SystemSettingsForm(request.POST, instance=settings)
         if form.is_valid():
             settings_obj = form.save(commit=False)
             settings_obj.updated_by = request.user
+            rotation_changed = (
+                settings.rotation_interval_hours != settings_obj.rotation_interval_hours
+            )
             settings_obj.save()
+
+            # إذا تم تغيير فترة التبديل وكان هناك تدوير قادم لم يحدث بعد،
+            # نضبط last_rotation_time بحيث يبقى موعد التبديل القادم كما هو
+            if rotation_changed and old_next_rotation:
+                from django.utils import timezone
+                from datetime import timedelta
+
+                now_local = timezone.localtime(timezone.now())
+                if old_next_rotation > now_local:
+                    preserved_next = old_next_rotation
+                    new_interval = settings_obj.get_effective_rotation_hours()
+                    adjusted_last_rotation = preserved_next - timedelta(hours=new_interval)
+                    settings_obj.last_rotation_time = adjusted_last_rotation
+                    settings_obj.save(update_fields=['last_rotation_time'])
+                    print(
+                        f"⏳ تم حفظ موعد التبديل القادم عند {preserved_next.strftime('%Y-%m-%d %H:%M')} "
+                        f"مع فترة جديدة قدرها {new_interval} ساعة"
+                    )
             
             # تحديث جدولة Celery
             update_celery_schedule()
@@ -1285,32 +1308,55 @@ def update_celery_schedule():
     
     settings = SystemSettings.get_current_settings()
     
-    # حفظ الجدولة الثابتة للإشعارات المبكرة
-    base_schedule = {
-        'check-early-notifications': {
-            'task': 'shifts.tasks.check_early_notifications_task',
-            'schedule': crontab(minute='0,10,20,30,40,50'),  # بداية كل 10 دقائق
-        },
-    }
-    
     if not settings.is_rotation_active:
-        # فقط الإشعارات المبكرة بدون التبديل
+        # فقط الإشعارات المبكرة بدون التبديل (كل 5 دقائق لضمان عدم تفويت الإشعارات)
+        base_schedule = {
+            'check-early-notifications': {
+                'task': 'shifts.tasks.check_early_notifications_task',
+                'schedule': crontab(minute='*/5'),  # كل 5 دقائق لضمان عدم تفويت الإشعارات
+            },
+        }
         current_app.conf.beat_schedule = base_schedule
         print("🔕 تم إيقاف جدولة التبديل التلقائي (الإشعارات المبكرة لا تزال نشطة)")
         return
     
-    # حساب الفترة بالساعات
+    # حساب الفترة بالساعات والدقائق
     rotation_hours = float(settings.get_effective_rotation_hours())
+    rotation_minutes = rotation_hours * 60
     
-    # إضافة جدولة التبديل الديناميكية باستخدام timedelta
-    base_schedule['rotate-shifts-dynamic'] = {
-        'task': 'shifts.tasks.rotate_shifts_task',
-        'schedule': timedelta(hours=rotation_hours),  # استخدام timedelta للمرونة
-        'args': ()  # سيستخدم الإعدادات المحفوظة
+    # حساب فترة beat للإشعارات وفق مدة التبديل
+    if rotation_minutes <= 30:
+        notification_interval = 1
+        notification_schedule = crontab()  # كل دقيقة
+    elif rotation_minutes <= 60:
+        notification_interval = 2
+        notification_schedule = crontab(minute='*/2')
+    elif rotation_minutes <= 120:
+        notification_interval = 5
+        notification_schedule = crontab(minute='*/5')
+    elif rotation_minutes <= 240:
+        notification_interval = 10
+        notification_schedule = crontab(minute='*/10')
+    else:
+        notification_interval = 15
+        notification_schedule = crontab(minute='0,15,30,45')
+    
+    # حفظ الجدولة الديناميكية
+    base_schedule = {
+        'check-early-notifications': {
+            'task': 'shifts.tasks.check_early_notifications_task',
+            'schedule': notification_schedule,
+        },
+        'rotate-shifts-dynamic': {
+            'task': 'shifts.tasks.rotate_shifts_task',
+            'schedule': crontab(minute='*'),  # كل دقيقة لضمان دقة المواعيد (التحقق يتم داخل المهمة)
+            'args': ()  # سيستخدم الإعدادات المحفوظة
+        },
     }
     
     current_app.conf.beat_schedule = base_schedule
     print(f"⏰ تم تحديث جدولة التبديل: كل {rotation_hours} ساعة")
+    print(f"📢 تم تحديث جدولة الإشعارات: كل {notification_interval:.0f} دقيقة")
 
 
 # ==================== تصدير التقارير (Export Reports) ====================

@@ -193,10 +193,8 @@
                 <div class="col-md-6">
                     <div class="info-row">
                         <div>
-                            <div class="info-label">فترة التبديل التلقائي (ثابتة)</div>
-                            <div class="info-value">{{ settings.rotation_interval_hours }} ساعة 
-                                <span style="font-size: 12px; color: #6c757d;">🔒 تلقائي</span>
-                            </div>
+                            <div class="info-label">فترة التبديل التلقائي</div>
+                            <div class="info-value">{{ settings.rotation_interval_hours }} ساعة</div>
                         </div>
                         <i class="fas fa-clock fa-2x text-primary"></i>
                     </div>
@@ -232,7 +230,23 @@
                 {% csrf_token %}
                 
                 <div class="row">
-                    <div class="col-md-12">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-stopwatch"></i>
+                                {{ form.rotation_interval_hours.label }}
+                            </label>
+                            {{ form.rotation_interval_hours }}
+                            <div class="help-text">
+                                <i class="fas fa-info-circle"></i>
+                                عدد الساعات بين كل تبديل رسمي
+                            </div>
+                            {% if form.rotation_interval_hours.errors %}
+                                <div class="text-danger mt-2">{{ form.rotation_interval_hours.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
                         <div class="form-group">
                             <label class="form-label">
                                 <i class="fas fa-bell"></i>

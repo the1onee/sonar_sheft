@@ -329,11 +329,11 @@ class AssignmentConfirmation(models.Model):
 class SystemSettings(models.Model):
     """موديل إعدادات النظام - إعدادات التبديل والإشعارات"""
 
-    # إعدادات التبديل (ثابت: 3 ساعات)
+    # إعدادات التبديل
     rotation_interval_hours = models.FloatField(
         default=3.0,
-        verbose_name='فترة التبديل (بالساعات) - ثابتة',
-        help_text='🔒 القيمة ثابتة: 3 ساعات (لا يمكن تغييرها من الواجهة)'
+        verbose_name='فترة التبديل (بالساعات)',
+        help_text='فترة التبديل بين الموظفين (بالساعات). مثال: 2.0 = كل ساعتين'
     )
 
     # إعدادات الإشعارات
@@ -379,56 +379,86 @@ class SystemSettings(models.Model):
         return self.rotation_interval_hours
 
     def get_next_rotation_time(self):
-        """حساب وقت التبديل التالي بناءً على الوقت الحالي والنظام الذكي
-        
-        النظام يعمل كالتالي:
-        1. أوقات نهاية الشفتات (أولوية قصوى): 7:00، 15:00، 23:00
-        2. أوقات التبديل الدورية كل 3 ساعات من بداية كل شفت:
-           - الصباحي: 7:00، 10:00، 13:00
-           - المسائي: 15:00، 18:00، 21:00
-           - الليلي: 23:00، 2:00، 5:00
-        """
+        """حساب وقت التبديل التالي مع مراعاة:
+        1. التبديل في نهاية كل شفت (7:00، 15:00، 23:00)
+        2. التبديل الدوري بناءً على rotation_interval_hours من آخر تبديل رسمي
+        يتم اختيار أقرب وقت قادم مع أولوية لنهاية الشفتات."""
         from datetime import datetime, timedelta, time
-        
+
+        tz = timezone.get_current_timezone()
         now = timezone.localtime(timezone.now())
         current_time = now.time()
-        
-        # أوقات التبديل المحتملة في اليوم (24 ساعة)
-        # نهايات الشفتات + كل 3 ساعات من بداية كل شفت
-        rotation_times = [
-            time(7, 0),   # نهاية ليلي / بداية صباحي
-            time(10, 0),  # تبديل دوري صباحي
-            time(13, 0),  # تبديل دوري صباحي
-            time(15, 0),  # نهاية صباحي / بداية مسائي
-            time(18, 0),  # تبديل دوري مسائي
-            time(21, 0),  # تبديل دوري مسائي
-            time(23, 0),  # نهاية مسائي / بداية ليلي
-            time(2, 0),   # تبديل دوري ليلي
-            time(5, 0),   # تبديل دوري ليلي
-        ]
-        
-        # ترتيب الأوقات
-        rotation_times.sort()
-        
-        # البحث عن الوقت التالي
-        next_rotation_time = None
-        
-        # التحقق من أوقات اليوم الحالي
-        for rotation_time in rotation_times:
-            if current_time < rotation_time:
-                # وجدنا الوقت التالي في نفس اليوم
-                next_rotation_time = datetime.combine(now.date(), rotation_time)
-                break
-        
-        # إذا لم نجد وقت في نفس اليوم، نأخذ أول وقت في اليوم التالي
-        if next_rotation_time is None:
-            tomorrow = now.date() + timedelta(days=1)
-            next_rotation_time = datetime.combine(tomorrow, rotation_times[0])
-        
-        # تحويل إلى timezone-aware
-        next_rotation_time = timezone.make_aware(next_rotation_time, timezone.get_current_timezone())
-        
-        return next_rotation_time
+
+        rotation_hours = max(float(self.rotation_interval_hours or 1.0), 0.1)
+
+        shift_end_times = {
+            "night": time(7, 0),
+            "morning": time(15, 0),
+            "evening": time(23, 0),
+        }
+
+        shift_ranges = {
+            "morning": (time(7, 0), time(15, 0)),
+            "evening": (time(15, 0), time(23, 0)),
+            "night": (time(23, 0), time(7, 0)),
+        }
+
+        # تحديد الشفت الحالي
+        current_shift_name = None
+        for name, (start, end) in shift_ranges.items():
+            if start <= end:
+                if start <= current_time < end:
+                    current_shift_name = name
+                    break
+            else:
+                if current_time >= start or current_time < end:
+                    current_shift_name = name
+                    break
+
+        # حساب أقرب نهاية شفت (وقت رسمي)
+        next_shift_end = None
+        for end_time in shift_end_times.values():
+            candidate = datetime.combine(now.date(), end_time)
+            candidate = timezone.make_aware(candidate, tz)
+            if candidate <= now:
+                candidate += timedelta(days=1)
+            if next_shift_end is None or candidate < next_shift_end:
+                next_shift_end = candidate
+
+        # حساب التبديل الدوري التالي
+        next_interval_time = None
+        rotation_delta = timedelta(hours=rotation_hours)
+
+        if self.last_rotation_time:
+            next_interval_time = self.last_rotation_time + rotation_delta
+            while next_interval_time <= now:
+                next_interval_time += rotation_delta
+        else:
+            # حساب البداية من الشفت الحالي
+            try:
+                shift = Shift.objects.get(name__iexact=current_shift_name.strip())
+            except (Shift.DoesNotExist, AttributeError):
+                shift = None
+
+            if shift:
+                shift_start = datetime.combine(now.date(), time(shift.start_hour, 0))
+                shift_start = timezone.make_aware(shift_start, tz)
+                if shift.end_hour <= shift.start_hour and current_time < time(shift.start_hour, 0):
+                    shift_start -= timedelta(days=1)
+
+                hours_since_start = (now - shift_start).total_seconds() / 3600
+                rotation_index = int(hours_since_start // rotation_hours) if rotation_hours > 0 else 0
+                next_interval_time = shift_start + timedelta(hours=(rotation_index + 1) * rotation_hours)
+                while next_interval_time <= now:
+                    next_interval_time += rotation_delta
+
+        # اختيار أقرب وقت قادم (مع أولوية لنهاية الشفت)
+        candidates = [t for t in [next_shift_end, next_interval_time] if t]
+        if not candidates:
+            return timezone.make_aware(datetime.combine(now.date(), time(7, 0)) + timedelta(days=1), tz)
+
+        candidates.sort()
+        return candidates[0]
 
     def update_last_rotation_time(self):
         """تحديث وقت آخر تبديل إلى الوقت الحالي"""
