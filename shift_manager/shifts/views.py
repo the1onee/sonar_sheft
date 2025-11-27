@@ -147,6 +147,35 @@ def manager_dashboard(request):
 @supervisor_required
 def supervisor_dashboard(request):
     """لوحة تحكم المشرف"""
+    from datetime import timedelta
+    
+    # 🔍 الحصول على فلتر الوقت من الطلب
+    time_filter = request.GET.get('time_filter', 'all')
+    
+    # حساب وقت البداية حسب الفلتر
+    now = timezone.now()
+    filter_start_time = None
+    filter_label = 'جميع التبديلات'
+    
+    if time_filter == '1h':
+        filter_start_time = now - timedelta(hours=1)
+        filter_label = 'آخر ساعة'
+    elif time_filter == '2h':
+        filter_start_time = now - timedelta(hours=2)
+        filter_label = 'آخر ساعتين'
+    elif time_filter == '3h':
+        filter_start_time = now - timedelta(hours=3)
+        filter_label = 'آخر 3 ساعات'
+    elif time_filter == '6h':
+        filter_start_time = now - timedelta(hours=6)
+        filter_label = 'آخر 6 ساعات'
+    elif time_filter == '12h':
+        filter_start_time = now - timedelta(hours=12)
+        filter_label = 'آخر 12 ساعة'
+    elif time_filter == 'today':
+        filter_start_time = timezone.localtime(now).replace(hour=0, minute=0, second=0, microsecond=0)
+        filter_label = 'اليوم فقط'
+    
     # إحصائيات المشرف
     pending_assignments = EmployeeAssignment.objects.filter(employee_confirmed=False).count()
     confirmed_today = EmployeeAssignment.objects.filter(
@@ -190,24 +219,24 @@ def supervisor_dashboard(request):
         supervisor_confirmed=False
     ).select_related('employee', 'sonar', 'shift').order_by('-employee_confirmed_at')
     
-    # جميع التبديلات (غير مؤكدة، مؤكدة من الموظف، مؤكدة من المشرف)
-    all_assignments = EmployeeAssignment.objects.select_related(
+    # 🔍 جميع التبديلات مع الفلتر الزمني
+    all_assignments_query = EmployeeAssignment.objects.select_related(
         'employee', 'sonar', 'shift', 'supervisor_confirmed_by'
-    ).order_by('-assigned_at')[:50]  # آخر 50 تبديل
+    )
     
-    # إحصائيات التأكيد
-    waiting_employee_count = EmployeeAssignment.objects.filter(
-        employee_confirmed=False
-    ).count()
+    if filter_start_time:
+        all_assignments_query = all_assignments_query.filter(assigned_at__gte=filter_start_time)
     
-    waiting_supervisor_count = EmployeeAssignment.objects.filter(
-        employee_confirmed=True,
-        supervisor_confirmed=False
-    ).count()
+    all_assignments = all_assignments_query.order_by('-assigned_at')[:100]  # آخر 100 تبديل
     
-    fully_confirmed_count = EmployeeAssignment.objects.filter(
-        supervisor_confirmed=True
-    ).count()
+    # إحصائيات التأكيد (مع الفلتر)
+    stats_query = EmployeeAssignment.objects.all()
+    if filter_start_time:
+        stats_query = stats_query.filter(assigned_at__gte=filter_start_time)
+    
+    waiting_employee_count = stats_query.filter(employee_confirmed=False).count()
+    waiting_supervisor_count = stats_query.filter(employee_confirmed=True, supervisor_confirmed=False).count()
+    fully_confirmed_count = stats_query.filter(supervisor_confirmed=True).count()
     
     # التبديلات المعلقة
     pending_list = EmployeeAssignment.objects.filter(
@@ -232,6 +261,9 @@ def supervisor_dashboard(request):
         'avg_work_hours': avg_work_hours,
         'top_workers': top_workers,
         'need_work': need_work,
+        # 🔍 فلتر الوقت
+        'time_filter': time_filter,
+        'filter_label': filter_label,
     }
     return render(request, 'dashboards/supervisor.html', context)
 

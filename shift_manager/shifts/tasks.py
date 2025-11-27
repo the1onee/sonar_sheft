@@ -58,17 +58,20 @@ def rotate_shifts_task(rotation_hours=None):
         "night": "ليلي"
     }
     
+    # 🔧 دالة لتحديد الشفت بناءً على وقت معين
+    def get_shift_for_time(check_time):
+        """تحديد الشفت المناسب لوقت معين"""
+        for shift_name, (start, end) in shift_ranges.items():
+            if start <= end:  # شفت عادي
+                if start <= check_time < end:
+                    return shift_name
+            else:  # شفت يمر منتصف الليل
+                if check_time >= start or check_time < end:
+                    return shift_name
+        return None
+    
     # تحديد الشفت الحالي
-    current_shift_name = None
-    for shift_name, (start, end) in shift_ranges.items():
-        if start <= end:  # شفت عادي
-            if start <= current_time < end:
-                current_shift_name = shift_name
-                break
-        else:  # شفت يمر منتصف الليل
-            if current_time >= start or current_time < end:
-                current_shift_name = shift_name
-                break
+    current_shift_name = get_shift_for_time(current_time)
     
     if not current_shift_name:
         print("❌ لا يوجد شفت نشط حاليا")
@@ -341,13 +344,19 @@ def rotate_shifts_task(rotation_hours=None):
         next_rotation_time = settings.last_rotation_time + required_interval
         next_rotation_time_local = timezone.localtime(next_rotation_time)
         hours_since = time_since_last.total_seconds() / 3600
+        
+        # 🔧 تحديد الشفت الصحيح بناءً على وقت التبديل (وليس الوقت الحالي)
+        target_shift_name = get_shift_for_time(next_rotation_time_local.time())
+        if not target_shift_name:
+            target_shift_name = current_shift_name
+        
         print(
             f"⏱️ مر {hours_since:.1f} ساعة من آخر تبديل "
-            f"(المطلوب: {rotation_hours} ساعة) - تنفيذ تبديل تعويضي #{catchup_rotations + 1}"
+            f"(المطلوب: {rotation_hours} ساعة) - تنفيذ تبديل تعويضي #{catchup_rotations + 1} للشفت {shift_labels.get(target_shift_name)}"
         )
         try:
             rotate_within_shift(
-                current_shift_name,
+                target_shift_name,  # استخدام الشفت الصحيح
                 rotation_hours,
                 lead_time_minutes=0,
                 next_rotation_time=next_rotation_time,
@@ -355,7 +364,7 @@ def rotate_shifts_task(rotation_hours=None):
             )
             settings.last_rotation_time = next_rotation_time
             settings.save(update_fields=['last_rotation_time'])
-            print(f"✅ تبديل دوري (تعويضي) في {next_rotation_time_local.strftime('%H:%M')}")
+            print(f"✅ تبديل دوري (تعويضي) في {next_rotation_time_local.strftime('%H:%M')} - شفت {shift_labels.get(target_shift_name)}")
             catchup_rotations += 1
             time_since_last = now - settings.last_rotation_time
         except Exception as e:
@@ -389,10 +398,15 @@ def rotate_shifts_task(rotation_hours=None):
     notification_window = 2
     
     if -notification_window <= minutes_until_notification <= notification_window:
+        # 🔧 تحديد الشفت الصحيح بناءً على وقت التبديل (وليس الوقت الحالي)
+        target_shift_name = get_shift_for_time(next_rotation_time_local.time())
+        if not target_shift_name:
+            target_shift_name = current_shift_name
+        
         # التحقق من عدم إرسال الإشعار مسبقاً
         existing_assignment = EmployeeAssignment.objects.filter(
             assigned_at=next_rotation_time,
-            shift__name=current_shift_name
+            shift__name=target_shift_name  # استخدام الشفت الصحيح
         ).first()
         
         if existing_assignment:
@@ -404,32 +418,32 @@ def rotate_shifts_task(rotation_hours=None):
             ).exists()
             
             if not recent_notification:
-                print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {next_rotation_time_local.strftime('%H:%M')}")
+                print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {next_rotation_time_local.strftime('%H:%M')} - شفت {shift_labels.get(target_shift_name)}")
                 try:
                     rotate_within_shift(
-                        current_shift_name, 
+                        target_shift_name,  # استخدام الشفت الصحيح
                         rotation_hours, 
                         lead_time_minutes=lead_minutes, 
                         next_rotation_time=next_rotation_time, 
                         is_early_notification=True
                     )
-                    print(f"✅ تم إرسال الإشعار المبكر بنجاح")
+                    print(f"✅ تم إرسال الإشعار المبكر بنجاح - شفت {shift_labels.get(target_shift_name)}")
                     return
                 except Exception as e:
                     print(f"❌ خطأ في إرسال الإشعار المبكر: {e}")
                     return
         else:
             # إنشاء التبديلات وإرسال الإشعار
-            print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {next_rotation_time_local.strftime('%H:%M')}")
+            print(f"📢 حان وقت إرسال الإشعار المبكر! التبديل القادم في {next_rotation_time_local.strftime('%H:%M')} - شفت {shift_labels.get(target_shift_name)}")
             try:
                 rotate_within_shift(
-                    current_shift_name, 
+                    target_shift_name,  # استخدام الشفت الصحيح
                     rotation_hours, 
                     lead_time_minutes=lead_minutes, 
                     next_rotation_time=next_rotation_time, 
                     is_early_notification=True
                 )
-                print(f"✅ تم إرسال الإشعار المبكر بنجاح")
+                print(f"✅ تم إرسال الإشعار المبكر بنجاح - شفت {shift_labels.get(target_shift_name)}")
                 return
             except Exception as e:
                 print(f"❌ خطأ في إرسال الإشعار المبكر: {e}")

@@ -94,27 +94,29 @@ def check_and_send_early_notifications():
                      
                      # تحديد الشفت المستهدف
                      target_shift_name = None
-                     t = next_rotation.time()
+                     # 🔧 مهم: تحويل إلى التوقيت المحلي (بغداد) قبل استخراج الوقت
+                     next_rotation_local = timezone.localtime(next_rotation)
+                     t = next_rotation_local.time()
                      
                      # التحقق من حدود الشفتات (بداية الشفت التالي)
                      if t.hour == 7 and t.minute == 0: target_shift_name = "morning"
                      elif t.hour == 15 and t.minute == 0: target_shift_name = "evening"
                      elif t.hour == 23 and t.minute == 0: target_shift_name = "night"
                      else:
-                         # داخل الشفت الحالي
+                         # داخل الشفت الحالي - باستخدام التوقيت المحلي
                          if time(7, 0) <= t < time(15, 0): target_shift_name = "morning"
                          elif time(15, 0) <= t < time(23, 0): target_shift_name = "evening"
                          else: target_shift_name = "night"
-                    
+                     
                      if target_shift_name:
-                        rotate_within_shift(
-                            target_shift_name, 
-                            rotation_hours, 
-                            lead_time_minutes=lead_minutes, 
-                            next_rotation_time=next_rotation, 
-                            is_early_notification=True
-                        )
-                        print("✅ تم تنفيذ الإشعار الأولي بنجاح")
+                         rotate_within_shift(
+                             target_shift_name, 
+                             rotation_hours, 
+                             lead_time_minutes=lead_minutes, 
+                             next_rotation_time=next_rotation, 
+                             is_early_notification=True
+                         )
+                         print("✅ تم تنفيذ الإشعار الأولي بنجاح")
     except Exception as e:
         print(f"❌ خطأ في فحص الإشعار الأولي: {e}")
 
@@ -209,9 +211,47 @@ def check_and_send_early_notifications():
                 notification_stage='final',
                 minutes_before=0
             )
+            
+            # ✅ تحديث ساعات العمل عند الإشعار النهائي
+            if not assignment.notification_sent and not assignment.is_standby:
+                emp = assignment.employee
+                emp.total_work_hours += work_hours
+                emp.last_work_datetime = assignment.assigned_at
+                emp.consecutive_rest_count = 0
+                emp.save()
+                
+                assignment.notification_sent = True
+                assignment.save(update_fields=['notification_sent'])
+                
+                print(f"  📊 تم تحديث ساعات {emp.name}: {emp.total_work_hours:.1f} ساعة (+{work_hours})")
+            
             notifications_sent += 1
             print(f"  ✅ إشعار نهائي للموظف: {assignment.employee.name} ({period_label})")
 
+    # ✅ التأكد من تحديث ساعات جميع التبديلات في النافذة الحالية (حتى بدون تليجرام)
+    for assignment in upcoming_assignments:
+        if assignment.is_standby or assignment.notification_sent:
+            continue
+        
+        # التحقق من وجود إشعار نهائي
+        has_final = EarlyNotification.objects.filter(
+            assignment=assignment,
+            notification_stage='final'
+        ).exists()
+        
+        if has_final:
+            emp = assignment.employee
+            work_hours = assignment.work_duration_hours or rotation_hours
+            emp.total_work_hours += work_hours
+            emp.last_work_datetime = assignment.assigned_at
+            emp.consecutive_rest_count = 0
+            emp.save()
+            
+            assignment.notification_sent = True
+            assignment.save(update_fields=['notification_sent'])
+            
+            print(f"  📊 تحديث ساعات (بدون تليجرام): {emp.name}: {emp.total_work_hours:.1f} ساعة (+{work_hours})")
+    
     if notifications_sent > 0:
         print(f"📢 تم إرسال {notifications_sent} إشعار نهائي بنجاح")
     else:
@@ -504,6 +544,7 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
                     print(f"  ⚠️ {emp.name} سيُوضع في {sonar.name} مرة أخرى (لا يوجد بديل متاح)")
             
             # 🧾 حفظ التعيين الجديد في قاعدة البيانات (أو استخدام الموجود)
+            # ✅ التأكيد التلقائي: جميع التبديلات مؤكدة تلقائياً
             assignment, created = EmployeeAssignment.objects.get_or_create(
                 employee=emp,
                 sonar=sonar,
@@ -512,19 +553,41 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
                 defaults={
                     'rotation_number': 0,
                     'is_standby': False,
-                    'work_duration_hours': rotation_hours
+                    'work_duration_hours': rotation_hours,
+                    'employee_confirmed': True,  # ✅ تأكيد تلقائي
+                    'employee_confirmed_at': current_rotation_start,
+                    'supervisor_confirmed': True,  # ✅ تأكيد تلقائي
+                    'supervisor_confirmed_at': current_rotation_start,
+                    'confirmed': True  # ✅ تأكيد نهائي
                 }
             )
             
             if not created:
                 print(f"  ℹ️ {emp.name} → {sonar.name} (موجود مسبقاً)")
+                # تحديث التأكيد للتبديلات الموجودة مسبقاً
+                if not assignment.confirmed:
+                    assignment.employee_confirmed = True
+                    assignment.employee_confirmed_at = current_rotation_start
+                    assignment.supervisor_confirmed = True
+                    assignment.supervisor_confirmed_at = current_rotation_start
+                    assignment.confirmed = True
+                    assignment.save()
             
-            # تحديث إحصائيات الموظف (فقط إذا لم يكن إشعار مبكر)
+            # 📊 تحديث إحصائيات الموظف (فقط إذا لم يكن إشعار مبكر)
             if not is_early_notification:
-                emp.total_work_hours += rotation_hours
-                emp.last_work_datetime = current_rotation_start
-                emp.consecutive_rest_count = 0  # إعادة تعيين عداد الراحة
-                emp.save()
+                # التحقق من عدم احتساب الساعات مسبقاً باستخدام notification_sent كعلامة
+                # notification_sent = True يعني أن الساعات تم احتسابها مسبقاً
+                if not assignment.notification_sent:
+                    emp.total_work_hours += rotation_hours
+                    emp.last_work_datetime = current_rotation_start
+                    emp.consecutive_rest_count = 0  # إعادة تعيين عداد الراحة
+                    emp.save()
+                    # وضع علامة أن الساعات تم احتسابها
+                    assignment.notification_sent = True
+                    assignment.save(update_fields=['notification_sent'])
+                    print(f"  📊 تم تحديث ساعات {emp.name}: {emp.total_work_hours:.1f} ساعة (+{rotation_hours})")
+                else:
+                    print(f"  ℹ️ {emp.name}: الساعات محسوبة مسبقاً ({emp.total_work_hours:.1f} ساعة)")
             
             sonar_assignment_count[sonar.id] += 1
             work_assignments.append((emp, sonar))
@@ -538,6 +601,7 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
         
         for emp in standby_employees:
             # 🧾 حفظ التعيين كاحتياط (بدون سونار) (أو استخدام الموجود)
+            # ✅ التأكيد التلقائي للاحتياط أيضاً
             assignment, created = EmployeeAssignment.objects.get_or_create(
                 employee=emp,
                 sonar=None,  # لا يوجد سونار للاحتياط
@@ -546,12 +610,25 @@ def rotate_within_shift(shift_name, rotation_hours=None, lead_time_minutes=0, ne
                 defaults={
                     'rotation_number': 0,
                     'is_standby': True,
-                    'work_duration_hours': 0.0
+                    'work_duration_hours': 0.0,
+                    'employee_confirmed': True,  # ✅ تأكيد تلقائي
+                    'employee_confirmed_at': current_rotation_start,
+                    'supervisor_confirmed': True,  # ✅ تأكيد تلقائي
+                    'supervisor_confirmed_at': current_rotation_start,
+                    'confirmed': True  # ✅ تأكيد نهائي
                 }
             )
             
             if not created:
                 print(f"  ℹ️ {emp.name} - في حالة احتياط (موجود مسبقاً)")
+                # تحديث التأكيد للتبديلات الموجودة مسبقاً
+                if not assignment.confirmed:
+                    assignment.employee_confirmed = True
+                    assignment.employee_confirmed_at = current_rotation_start
+                    assignment.supervisor_confirmed = True
+                    assignment.supervisor_confirmed_at = current_rotation_start
+                    assignment.confirmed = True
+                    assignment.save()
             
             # تحديث عداد الراحة المتتالية (فقط إذا لم يكن إشعار مبكر)
             if not is_early_notification:
